@@ -63,6 +63,8 @@
 #xun-results {
   overflow-y: auto;
   max-height: 380px;
+  scrollbar-width: thin;
+  scrollbar-color: #45475a transparent;
 }
 
 .xun-result {
