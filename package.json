@@ -4,7 +4,9 @@
   "license": "MIT",
   "private": true,
   "scripts": {
-    "build": "tsc && node -e \"const fs=require('fs'),p=require('path'),d='dist';fs.readdirSync(d).filter(f=>f.endsWith('.js')).forEach(f=>{const fp=p.join(d,f);fs.writeFileSync(fp,fs.readFileSync(fp,'utf8').replace(/^export /gm,''))})\"",
+    "build": "npm run build:dev",
+    "build:dev": "tsc && node -e \"const fs=require('fs'),p=require('path'),d='dist';fs.readdirSync(d).filter(f=>f.endsWith('.js')).forEach(f=>{const fp=p.join(d,f);fs.writeFileSync(fp,fs.readFileSync(fp,'utf8').replace(/^export /gm,''))})\"",
+    "build:prod": "tsc && node -e \"const fs=require('fs'),p=require('path'),d='dist';fs.readdirSync(d).filter(f=>f.endsWith('.js')).forEach(f=>{const fp=p.join(d,f);fs.writeFileSync(fp,fs.readFileSync(fp,'utf8').replace(/^export /gm,'').replace(/const DEV = true/g,'const DEV = false'))})\"",
     "test": "vitest run",
     "test:watch": "vitest",
     "coverage": "vitest run --coverage",

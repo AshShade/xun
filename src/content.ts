@@ -1,6 +1,7 @@
 // Content script: injects Xun overlay into the page
 
 import type { Plugin, SearchResponse, Shortcut } from "./types";
+const DEV = true;
 
 let overlay: HTMLDivElement | null = null;
 let selectedIndex = -1;
@@ -16,6 +17,8 @@ function highlightSelected(): void {
   container.querySelectorAll(".xun-selected").forEach((el) => el.classList.remove("xun-selected"));
   const row = container.children[selectedIndex] as HTMLElement | undefined;
   if (row) { row.classList.add("xun-selected"); row.scrollIntoView({ block: "nearest" }); }
+  const item = selectedIndex >= 0 ? results[selectedIndex] : null;
+  if (DEV && item) console.log("[xun]", `#${selectedIndex}`, `score=${item.score}`, item.type, item.title, item.url);
   const preview = overlay.querySelector("#xun-preview") as HTMLElement | undefined;
   if (preview) {
     const url = selectedIndex >= 0 && results[selectedIndex] ? results[selectedIndex]!.url : "";

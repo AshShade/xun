@@ -30,7 +30,7 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - run: npm run build
+      - run: npm run build:prod
       - run: npx web-ext build --source-dir . --artifacts-dir artifacts --overwrite-dest
       - name: Sign and publish
         run: npx web-ext sign --source-dir . --artifacts-dir artifacts --channel listed --amo-metadata amo-metadata.json --timeout 900000 || echo "Timed out waiting for approval — submission was successful, check AMO dashboard"
