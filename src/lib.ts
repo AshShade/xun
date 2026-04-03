@@ -46,8 +46,9 @@ export function parseQuery(raw: string, config: Config): ParsedQuery {
 export function recencyBoost(lastVisitTime: number | null | undefined): number {
   if (!lastVisitTime) return 0;
   const hoursAgo = (Date.now() - lastVisitTime) / (1000 * 60 * 60);
-  if (hoursAgo < 1) return 50;
-  if (hoursAgo < 4) return 40;
+  if (hoursAgo < 0.1) return 120;
+  if (hoursAgo < 1) return 80;
+  if (hoursAgo < 4) return 50;
   if (hoursAgo < 24) return 30;
   if (hoursAgo < 72) return 20;
   if (hoursAgo < 168) return 10;

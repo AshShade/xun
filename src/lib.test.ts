@@ -49,7 +49,7 @@ describe("parseQuery", () => {
 });
 
 describe("recencyBoost", () => {
-  it("returns 50 for < 1 hour", () => { expect(recencyBoost(Date.now() - 30 * 60 * 1000)).toBe(50); });
+  it("returns 80 for < 1 hour", () => { expect(recencyBoost(Date.now() - 30 * 60 * 1000)).toBe(80); });
   it("returns 0 for > 7 days", () => { expect(recencyBoost(Date.now() - 8 * 24 * 60 * 60 * 1000)).toBe(0); });
   it("returns 0 for null", () => { expect(recencyBoost(null)).toBe(0); });
 });
