@@ -16,6 +16,12 @@ function highlightSelected(): void {
   container.querySelectorAll(".xun-selected").forEach((el) => el.classList.remove("xun-selected"));
   const row = container.children[selectedIndex] as HTMLElement | undefined;
   if (row) { row.classList.add("xun-selected"); row.scrollIntoView({ block: "nearest" }); }
+  const preview = overlay.querySelector("#xun-preview") as HTMLElement | undefined;
+  if (preview) {
+    const url = selectedIndex >= 0 && results[selectedIndex] ? results[selectedIndex]!.url : "";
+    preview.textContent = url;
+    preview.style.display = url ? "block" : "none";
+  }
 }
 let activePlugin: Plugin | null = null;
 let sourceColors: Record<string, string> = { tabs: "#89b4fa", bookmarks: "#f9e2af", history: "#a6e3a1" };
@@ -62,6 +68,7 @@ function open(): void {
       </div>
       <div id="xun-results"></div>
     </div>
+    <div id="xun-preview"></div>
   `;
   document.documentElement.appendChild(overlay);
   const input = overlay.querySelector<HTMLInputElement>("#xun-input")!;
@@ -223,6 +230,12 @@ function renderResults(items: SearchResponse["results"]): void {
     container.appendChild(row);
   });
 
+  const preview = overlay.querySelector("#xun-preview") as HTMLElement | undefined;
+  if (preview) {
+    const url = selectedIndex >= 0 && items[selectedIndex] ? items[selectedIndex]!.url : "";
+    preview.textContent = url;
+    preview.style.display = url ? "block" : "none";
+  }
 }
 
 function truncateUrl(url: string): string {

@@ -106,3 +106,23 @@
   max-width: 200px;
   flex-shrink: 0;
 }
+
+#xun-preview {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  max-width: 50%;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  color: #cdd6f4;
+  background: #1e1e2e;
+  border: 1px solid #313244;
+  border-bottom: none;
+  border-left: none;
+  border-top-right-radius: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  z-index: 2147483647;
+}
