@@ -244,11 +244,8 @@ function renderResults(items: SearchResponse["results"]): void {
 
 function truncateUrl(url: string): string {
   try {
-    const u = new URL(url);
-    const path = u.pathname === "/" ? "" : u.pathname;
-    const display = u.hostname + path;
-    return display.length > 60 ? display.slice(0, 60) + "…" : display;
-  } catch { return url.slice(0, 60); }
+    return new URL(url).hostname;
+  } catch { return url.slice(0, 40); }
 }
 
 function escapeHtml(str: string): string {

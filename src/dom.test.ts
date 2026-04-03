@@ -59,7 +59,7 @@ describe("buildResultRow", () => {
     expect(row.className).toBe("xun-result");
     expect(row.querySelector(".xun-type")!.textContent).toBe("History");
     expect(row.querySelector(".xun-title")!.textContent).toBe("My Page");
-    expect(row.querySelector(".xun-url")!.textContent).toBe("example.com/page");
+    expect(row.querySelector(".xun-url")!.textContent).toBe("example.com");
   });
 
   it("adds xun-selected class when isSelected is true", () => {
@@ -98,18 +98,16 @@ describe("hexToRgba", () => {
 });
 
 describe("truncateUrl", () => {
-  it("strips protocol and shows hostname + path", () => {
-    expect(truncateUrl("https://example.com/page")).toBe("example.com/page");
+  it("shows hostname only", () => {
+    expect(truncateUrl("https://example.com/page")).toBe("example.com");
   });
 
   it("strips trailing slash", () => {
     expect(truncateUrl("https://example.com/")).toBe("example.com");
   });
 
-  it("truncates long URLs with ellipsis", () => {
-    const long = "https://example.com/" + "a".repeat(80);
-    expect(truncateUrl(long).endsWith("…")).toBe(true);
-    expect(truncateUrl(long).length).toBe(61);
+  it("strips query params", () => {
+    expect(truncateUrl("https://example.com/page?a=1")).toBe("example.com");
   });
 
   it("handles invalid URLs", () => {

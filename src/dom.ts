@@ -9,11 +9,8 @@ export function hexToRgba(hex: string, alpha: number): string {
 
 export function truncateUrl(url: string): string {
   try {
-    const u = new URL(url);
-    const path = u.pathname === "/" ? "" : u.pathname;
-    const display = u.hostname + path;
-    return display.length > 60 ? display.slice(0, 60) + "…" : display;
-  } catch { return url.slice(0, 60); }
+    return new URL(url).hostname;
+  } catch { return url.slice(0, 40); }
 }
 
 const TYPE_LABELS: Record<string, string> = { tab: "Tab", bookmark: "Bookmark", history: "History" };
