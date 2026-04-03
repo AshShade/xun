@@ -1,0 +1,40 @@
+{
+  "manifest_version": 2,
+  "name": "Xun (寻)",
+  "version": "0.1.0",
+  "description": "Spotlight-style search for browser history, bookmarks, and open tabs",
+  "permissions": [
+    "history",
+    "bookmarks",
+    "tabs",
+    "storage"
+  ],
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": false
+  },
+  "icons": {
+    "48": "icons/xun.svg",
+    "96": "icons/xun.svg"
+  },
+  "browser_action": {
+    "default_icon": "icons/xun.svg",
+    "default_popup": "options.html",
+    "default_title": "Xun (寻) Settings"
+  },
+  "background": {
+    "scripts": ["dist/lib.js", "dist/background.js"]
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["dist/content.js"],
+      "css": ["xun.css"]
+    }
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "xun@AshShade"
+    }
+  }
+}

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><style>
+  body { font-family: -apple-system, sans-serif; background: #1e1e2e; color: #cdd6f4; padding: 20px; min-width: 380px; }
+  h2 { font-size: 16px; margin: 0 0 16px; color: #cba6f7; }
+  label { font-size: 13px; color: #a6adc8; display: block; margin-bottom: 6px; }
+  input, select { background: #313244; border: 1px solid #45475a; border-radius: 6px; color: #cdd6f4; padding: 6px 10px; font-size: 13px; box-sizing: border-box; }
+  input:focus { border-color: #cba6f7; outline: none; }
+  #shortcut { width: 100%; text-align: center; cursor: pointer; padding: 8px 12px; font-size: 14px; }
+  #search-engine { width: 100%; }
+  .hint { font-size: 11px; color: #585b70; margin-top: 6px; }
+  #status { font-size: 12px; color: #a6e3a1; margin-top: 10px; opacity: 0; transition: opacity 0.3s; }
+  .section { margin-top: 16px; }
+  .prefix-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .prefix-row span { font-size: 13px; color: #a6adc8; min-width: 70px; }
+  .prefix { width: 80px; }
+  .cat-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+  .cat-row input[type="text"] { flex: 1; min-width: 0; }
+  .cat-row input[name="prefix"] { width: 50px; flex: none; }
+  .cat-row select { background: #313244; border: 1px solid #45475a; border-radius: 6px; color: #a6adc8; padding: 4px 6px; font-size: 11px; flex: none; }
+  .color-picker { position: relative; flex-shrink: 0; }
+  .color-toggle { width: 24px; height: 24px; border-radius: 50%; border: 2px solid #45475a; cursor: pointer; padding: 0; }
+  .color-toggle:hover { border-color: #cdd6f4; }
+  .color-dropdown { display: none; position: absolute; top: 30px; right: 0; background: #313244; border: 1px solid #45475a; border-radius: 8px; padding: 6px; z-index: 10; grid-template-columns: repeat(5, 1fr); gap: 4px; }
+  .color-dropdown.open { display: grid; }
+  .color-btn { width: 22px; height: 22px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; }
+  .color-btn.selected { border-color: #cdd6f4; }
+  .color-btn.taken { opacity: 0.2; cursor: not-allowed; }
+  .cat-remove { background: none; border: none; color: #f38ba8; cursor: pointer; font-size: 16px; padding: 0 4px; }
+  .cat-remove:hover { color: #eba0ac; }
+  #add-cat { background: #313244; border: 1px solid #45475a; border-radius: 6px; color: #a6adc8; padding: 6px 12px; font-size: 12px; cursor: pointer; margin-top: 4px; }
+  #add-cat:hover { border-color: #cba6f7; color: #cdd6f4; }
+  .action-btn { background: #313244; border: 1px solid #45475a; border-radius: 6px; color: #a6adc8; padding: 6px 12px; font-size: 12px; cursor: pointer; }
+  .action-btn:hover { border-color: #cba6f7; color: #cdd6f4; }
+</style></head>
+<body>
+  <h2>寻 Xun — Settings</h2>
+
+  <label>Toggle shortcut</label>
+  <input id="shortcut" readonly placeholder="Click and press your shortcut..." />
+  <div class="hint">Click the field, then press your desired key combination</div>
+
+  <div class="section">
+    <label>Source prefixes</label>
+    <div class="prefix-row" data-source="tabs" data-color="#89b4fa"><span>Tabs</span><input id="prefix-tabs" class="prefix" /><div class="color-picker"></div></div>
+    <div class="prefix-row" data-source="bookmarks" data-color="#f9e2af"><span>Bookmarks</span><input id="prefix-bookmarks" class="prefix" /><div class="color-picker"></div></div>
+    <div class="prefix-row" data-source="history" data-color="#a6e3a1"><span>History</span><input id="prefix-history" class="prefix" /><div class="color-picker"></div></div>
+  </div>
+
+  <div class="section">
+    <label>Plugins</label>
+    <div id="categories"></div>
+    <button id="add-cat">+ Add plugin</button>
+    <div class="hint">Pattern: filter by URL glob. Search: redirect to a URL with %s query.</div>
+  </div>
+
+  <div class="section">
+    <label>Search engine</label>
+    <input id="search-engine" placeholder="https://www.google.com/search?q=%s" />
+    <div class="hint">Use %s as placeholder for the query</div>
+  </div>
+
+  <div id="status">Saved</div>
+
+  <div class="section">
+    <button id="edit-json" class="action-btn" style="width:100%">Edit config as JSON</button>
+  </div>
+
+  <script src="dist/lib.js"></script>
+  <script src="dist/options.js"></script>
+</body>
+</html>
