@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><style>
+  * { box-sizing: border-box; margin: 0; }
+  body { background: #1e1e2e; color: #cdd6f4; font-family: -apple-system, sans-serif; height: 100vh; display: flex; }
+  .panel { display: flex; flex-direction: column; padding: 16px; }
+  #editor-panel { flex: 1; min-width: 0; }
+  #docs { width: 340px; border-left: 1px solid #313244; overflow-y: auto; font-size: 13px; line-height: 1.6; }
+  #docs.hidden { display: none; }
+  #docs h3 { color: #cba6f7; font-size: 14px; margin: 14px 0 6px; }
+  #docs h3:first-child { margin-top: 0; }
+  #docs code { background: #313244; padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+  #docs table { width: 100%; border-collapse: collapse; margin: 6px 0; font-size: 12px; }
+  #docs td, #docs th { padding: 4px 8px; border: 1px solid #313244; text-align: left; }
+  #docs th { background: #181825; color: #a6adc8; }
+  #docs .example { background: #181825; padding: 8px; border-radius: 6px; margin: 6px 0; font-family: monospace; font-size: 11px; white-space: pre; overflow-x: auto; line-height: 1.5; display: block; min-height: fit-content; flex-shrink: 0; }
+  h2 { font-size: 16px; color: #cba6f7; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; }
+  textarea { flex: 1; background: #181825; color: #cdd6f4; border: 1px solid #313244; border-radius: 8px; padding: 14px; font-family: "SF Mono", "Fira Code", monospace; font-size: 13px; line-height: 1.5; resize: none; tab-size: 2; }
+  textarea:focus { outline: none; border-color: #cba6f7; }
+  .bar { display: flex; gap: 8px; margin-top: 10px; align-items: center; }
+  button { background: #313244; border: 1px solid #45475a; border-radius: 6px; color: #cdd6f4; padding: 8px 16px; font-size: 13px; cursor: pointer; }
+  button:hover { border-color: #cba6f7; }
+  #save-btn { background: #cba6f7; color: #1e1e2e; border-color: #cba6f7; font-weight: 600; }
+  #save-btn:hover { background: #b4befe; }
+  #status { font-size: 12px; margin-left: 8px; opacity: 0; transition: opacity 0.3s; }
+  .ok { color: #a6e3a1; }
+  .err { color: #f38ba8; }
+  .small-btn { font-size: 11px; padding: 4px 10px; }
+</style></head>
+<body>
+  <div id="editor-panel" class="panel">
+    <h2>寻 Xun — Config Editor <span><button id="toggle-docs" class="small-btn">Docs</button> <button id="reset-btn" class="small-btn">Reset</button></span></h2>
+    <textarea id="editor" spellcheck="false"></textarea>
+    <div class="bar">
+      <button id="save-btn">Save</button>
+      <button id="format-btn">Format</button>
+      <span id="status"></span>
+    </div>
+  </div>
+  <div id="docs" class="panel">
+    <h3>Plugins</h3>
+    <p>Two types: <code>pattern</code> and <code>search</code>.</p>
+
+    <h3>Pattern Plugin</h3>
+    <p>Filters results by URL glob pattern.</p>
+<pre class="example">{
+  "name": "Wiki",
+  "prefix": "w",
+  "pluginType": "pattern",
+  "patterns": ["docs.example.com"],
+  "color": "#f38ba8"
+}</pre>
+
+    <h3>Search Plugin</h3>
+    <p>Redirects to a URL with <code>%s</code> replaced by query.</p>
+<pre class="example">{
+  "name": "CodeSearch",
+  "prefix": "cs",
+  "pluginType": "search",
+  "url": "https://grep.app/search?q=%s",
+  "color": "#fab387"
+}</pre>
+
+    <h3>Prefixes</h3>
+    <p>First word followed by a space activates a prefix. A label appears in the search bar when active.</p>
+<pre class="example">"prefixes": {
+  "history": "h",
+  "tabs": "t",
+  "bookmarks": "b"
+}</pre>
+
+    <h3>Glob Syntax</h3>
+    <p>Matched against <code>hostname + path</code> (no protocol).</p>
+    <table>
+      <tr><th>Symbol</th><th>Matches</th></tr>
+      <tr><td><code>*</code></td><td>Any chars except <code>.</code> and <code>/</code></td></tr>
+      <tr><td><code>**</code></td><td>Any chars including <code>.</code> and <code>/</code></td></tr>
+    </table>
+    <p>Domain-only patterns (no <code>/</code>) auto-match all paths.</p>
+    <table>
+      <tr><th>Pattern</th><th>Matches</th></tr>
+      <tr><td><code>github.com</code></td><td><code>github.com/user/repo</code></td></tr>
+      <tr><td><code>*.github.com</code></td><td><code>gist.github.com/**</code></td></tr>
+      <tr><td><code>docs.example.com/wiki/view/*</code></td><td>One level under view/</td></tr>
+      <tr><td><code>docs.example.com/wiki/view/**</code></td><td>Any depth under view/</td></tr>
+    </table>
+
+    <h3>Source Colors</h3>
+    <p>Customize badge colors for built-in types.</p>
+<pre class="example">"sourceColors": {
+  "tabs": "#89b4fa",
+  "bookmarks": "#f9e2af",
+  "history": "#a6e3a1"
+}</pre>
+
+    <h3>Shortcut</h3>
+    <p>Modifier keys + key name.</p>
+<pre class="example">"shortcut": {
+  "ctrlKey": false,
+  "metaKey": true,
+  "key": "k"
+}</pre>
+  </div>
+  <script src="dist/lib.js"></script>
+  <script src="dist/editor.js"></script>
+</body>
+</html>
