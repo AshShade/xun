@@ -193,7 +193,11 @@ function renderResults(items: SearchResponse["results"]): void {
   if (!overlay) return;
   const container = overlay.querySelector<HTMLDivElement>("#xun-results")!;
   container.innerHTML = "";
-  if (!items.length) return;
+  if (!items.length) {
+    const preview = overlay.querySelector("#xun-preview") as HTMLElement | undefined;
+    if (preview) { preview.textContent = ""; preview.style.display = "none"; }
+    return;
+  }
 
   items.forEach((item, i) => {
     const label = item.categoryLabel || TYPE_LABELS[item.type] || item.type;
