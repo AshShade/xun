@@ -10,6 +10,16 @@ let hasPrefix = false;
 let currentQuery = "";
 let deepTimer: ReturnType<typeof setTimeout> | null = null;
 
+function updatePreview(): void {
+  if (!overlay) return;
+  const preview = overlay.querySelector("#xun-preview") as HTMLElement | undefined;
+  if (!preview) return;
+  const item = selectedIndex >= 0 ? results[selectedIndex] : null;
+  const label = item ? (item.tabId != null ? "(tab) " : "") + item.url : "";
+  preview.textContent = label;
+  preview.style.display = label ? "block" : "none";
+}
+
 function highlightSelected(): void {
   if (!overlay) return;
   const container = overlay.querySelector("#xun-results");
@@ -17,23 +27,20 @@ function highlightSelected(): void {
   container.querySelectorAll(".xun-selected").forEach((el) => el.classList.remove("xun-selected"));
   const row = container.children[selectedIndex] as HTMLElement | undefined;
   if (row) { row.classList.add("xun-selected"); row.scrollIntoView({ block: "nearest" }); }
-  const item = selectedIndex >= 0 ? results[selectedIndex] : null;
-  if (DEV && item) {
-    const v = item.visitCount !== undefined ? item.visitCount : "?";
-    const age = item.lastVisitTime ? ((Date.now() - item.lastVisitTime) / 60000).toFixed(1) + "m ago" : "n/a";
-    const flags = [item.type, item.tabId != null ? "tab" : "", item.visitCount != null ? "hist" : ""].filter(Boolean).join("+");
-    console.log("[xun]", `#${selectedIndex}`, `score=${item.score} visits=${v} age=${age}`, flags, item.title, item.url);
-  }
-  const preview = overlay.querySelector("#xun-preview") as HTMLElement | undefined;
-  if (preview) {
+  if (DEV) {
     const item = selectedIndex >= 0 ? results[selectedIndex] : null;
-    const label = item ? (item.tabId != null ? "(tab) " : "") + item.url : "";
-    preview.textContent = label;
-    preview.style.display = label ? "block" : "none";
+    if (item) {
+      const v = item.visitCount !== undefined ? item.visitCount : "?";
+      const age = item.lastVisitTime ? ((Date.now() - item.lastVisitTime) / 60000).toFixed(1) + "m ago" : "n/a";
+      const flags = [item.type, item.tabId != null ? "tab" : "", item.visitCount != null ? "hist" : ""].filter(Boolean).join("+");
+      console.log("[xun]", `#${selectedIndex}`, `score=${item.score} visits=${v} age=${age}`, flags, item.title, item.url);
+    }
   }
+  updatePreview();
 }
 let activePlugin: Plugin | null = null;
 let sourceColors: Record<string, string> = { tabs: "#89b4fa", bookmarks: "#f9e2af", history: "#a6e3a1" };
+let searchEngine = "https://www.google.com/search?q=%s";
 
 const isMac = navigator.platform.includes("Mac");
 const DEFAULT_SHORTCUT: Shortcut = isMac
@@ -66,6 +73,10 @@ function toggle(): void {
 
 function open(): void {
   browser.runtime.sendMessage({ type: "refresh-cache" });
+  browser.runtime.sendMessage({ type: "get-config" }).then((raw: unknown) => {
+    const c = raw as { searchEngine?: string };
+    if (c.searchEngine) searchEngine = c.searchEngine;
+  });
   overlay = document.createElement("div");
   overlay.id = "xun-overlay";
   overlay.innerHTML = `
@@ -161,13 +172,10 @@ function onKeydown(e: KeyboardEvent): void {
       navigate(results[selectedIndex]!, newTab);
     } else if (activePlugin?.pluginType === "search" && currentQuery) {
       const q = currentQuery.trim().split(" ").slice(1).join(" ").trim();
-      if (q) {
-        browser.runtime.sendMessage({ type: "plugin-search", urlTemplate: (activePlugin as { url: string }).url, query: q });
-        close();
-      }
+      if (q) navigate({ type: "history", title: "", url: (activePlugin as { url: string }).url.replace("%s", encodeURIComponent(q)), score: 0 }, newTab);
     } else if (currentQuery) {
-      browser.runtime.sendMessage({ type: "search-engine", query: currentQuery.trim(), newTab });
-      close();
+      const url = searchEngine.replace("%s", encodeURIComponent(currentQuery.trim()));
+      navigate({ type: "history", title: "", url, score: 0 }, newTab);
     }
   }
 }
@@ -248,25 +256,13 @@ function renderResults(items: SearchResponse["results"]): void {
     container.appendChild(row);
   });
 
-  const preview = overlay.querySelector("#xun-preview") as HTMLElement | undefined;
-  if (preview) {
-    const item = selectedIndex >= 0 ? items[selectedIndex] : null;
-    const label = item ? (item.tabId != null ? "(tab) " : "") + item.url : "";
-    preview.textContent = label;
-    preview.style.display = label ? "block" : "none";
-  }
+  updatePreview();
 }
 
 function truncateUrl(url: string): string {
   try {
     return new URL(url).hostname;
   } catch { return url.slice(0, 40); }
-}
-
-function escapeHtml(str: string): string {
-  const div = document.createElement("div");
-  div.textContent = str;
-  return div.innerHTML;
 }
 
 function hexToRgba(hex: string, alpha: number): string {

@@ -44,10 +44,8 @@ interface NavigateMessage { type: "navigate"; url: string; tabId?: number; windo
 interface SearchMessage { type: "search"; query: string }
 interface DeepSearchMessage { type: "deep-search"; query: string }
 interface RefreshMessage { type: "refresh-cache" }
-interface SearchEngineMessage { type: "search-engine"; query: string; newTab?: boolean }
-interface PluginSearchMessage { type: "plugin-search"; urlTemplate: string; query: string }
 interface GetConfigMessage { type: "get-config" }
-type Message = NavigateMessage | SearchMessage | DeepSearchMessage | RefreshMessage | SearchEngineMessage | PluginSearchMessage | GetConfigMessage;
+type Message = NavigateMessage | SearchMessage | DeepSearchMessage | RefreshMessage | GetConfigMessage;
 
 browser.runtime.onMessage.addListener((msg: Message, sender: browser.runtime.MessageSender, sendResponse: (response: SearchResponse | Config) => void) => {
   if (msg.type === "refresh-cache") {
@@ -71,14 +69,6 @@ browser.runtime.onMessage.addListener((msg: Message, sender: browser.runtime.Mes
     } else if (sender.tab?.id) {
       browser.tabs.update(sender.tab.id, { url: msg.url });
     }
-  }
-  if (msg.type === "search-engine") {
-    const url = config.searchEngine.replace("%s", encodeURIComponent(msg.query));
-    if (msg.newTab) browser.tabs.create({ url });
-    else if (sender.tab?.id) browser.tabs.update(sender.tab.id, { url });
-  }
-  if (msg.type === "plugin-search") {
-    browser.tabs.create({ url: msg.urlTemplate.replace("%s", encodeURIComponent(msg.query)) });
   }
   if (msg.type === "get-config") {
     sendResponse(config);
@@ -114,8 +104,6 @@ async function deepSearch(raw: string): Promise<SearchResponse> {
 
   const apiResults = await browser.history.search({ text: query, maxResults: 100, startTime: 0 });
   mergeHistoryCache(historyCache, apiResults);
-
-  return handleSearch(raw);
 
   return handleSearch(raw);
 }
