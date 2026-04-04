@@ -16,6 +16,7 @@ Spotlight-style search for Firefox — search open tabs, bookmarks, and history 
 - `↑`/`↓` to navigate, `Enter` to go, `Esc` to close
 - Click a result or click outside to dismiss
 - `Enter` with no result selected searches the web (configurable engine)
+- Full URL shown at bottom-left when a result is selected (like browser link hover)
 
 ## Prefix Filters
 
@@ -84,21 +85,30 @@ If a pattern contains no `/`, `/**` is appended automatically so domain-only pat
 
 ## Ranking
 
-Results are scored by frecency (frequency + recency) and sorted highest first:
+Results are scored by frecency — a combination of visit frequency, recency, and source type — then sorted highest first.
 
-- **Open tabs** — base score 100
-- **Bookmarks** — base score 50
-- **History** — `min(visitCount, 50) × 2` + recency bonus:
+**Core formula (history):**
 
-| Last visited | Bonus |
-|-------------|-------|
-| < 1 hour | +50 |
-| < 4 hours | +40 |
-| < 24 hours | +30 |
-| < 3 days | +20 |
-| < 7 days | +10 |
+```
+score = min(visitCount, 10) × e^(-0.3 × √hours) × 100
+```
 
-URLs appearing in multiple sources (e.g. a bookmarked page in history) get combined scores.
+The exponential decay on `√hours` drops fast in the first few hours, then flattens — a page from 3 hours ago still scores well, but a page from a week ago is nearly gone.
+
+**Source bonuses** (applied once per URL, no double-counting):
+
+| Source | Bonus |
+|--------|-------|
+| Open tab | +150 |
+| Bookmark | +30 |
+
+URLs appearing in multiple sources get combined: a bookmarked page open in a tab with history visits gets `historyScore + 150 + 30`.
+
+**Design principles:**
+- Recency dominates — a page visited minutes ago always ranks near the top
+- Frequency is capped at 10 visits — beyond that, recency decides
+- Open tabs get a strong bonus — you have them open for a reason
+- Bookmarks get a small nudge — not enough to save a stale page
 
 ## Settings
 
@@ -114,9 +124,12 @@ Click the toolbar icon to configure:
 
 ```bash
 npm install
-npm run build    # compile TypeScript to dist/
-npm run check    # type-check + run tests
-npm run coverage # tests with coverage report
+npm run build        # dev build (includes debug logging)
+npm run build:prod   # prod build (strips debug logging)
+npm run check        # type-check + run tests
+npm run coverage     # tests with coverage report
 ```
 
 Load in Firefox: `about:debugging` → This Firefox → Load Temporary Add-on → select `manifest.json`. Reload after changes.
+
+Dev builds include `DEV` mode: selecting a result logs its score breakdown (visit count, recency, source type) to the browser console.
