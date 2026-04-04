@@ -83,6 +83,10 @@ function open(): void {
   input.focus();
   input.addEventListener("input", onInput);
   overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+  overlay.addEventListener("mousemove", () => {
+    const c = overlay?.querySelector<HTMLDivElement>("#xun-results");
+    if (c) c.style.pointerEvents = "auto";
+  });
   document.addEventListener("keydown", onKeydown);
 }
 
@@ -201,6 +205,7 @@ function renderResults(items: SearchResponse["results"]): void {
   if (!overlay) return;
   const container = overlay.querySelector<HTMLDivElement>("#xun-results")!;
   container.innerHTML = "";
+  container.style.pointerEvents = "none";
   if (!items.length) {
     const preview = overlay.querySelector("#xun-preview") as HTMLElement | undefined;
     if (preview) { preview.textContent = ""; preview.style.display = "none"; }
