@@ -44,7 +44,7 @@ export function parseQuery(raw: string, config: Config): ParsedQuery {
 }
 
 export function decayScore(visitCount: number | null | undefined, lastVisitTime: number | null | undefined): number {
-  const v = Math.min(visitCount ?? 0, 50);
+  const v = Math.min(visitCount ?? 0, 10);
   if (!lastVisitTime || v === 0) return 0;
   const hours = Math.max(0, (Date.now() - lastVisitTime) / (1000 * 60 * 60));
   return Math.round(v * Math.exp(-0.3 * Math.sqrt(hours)) * 100);
@@ -154,7 +154,7 @@ export function mergeResults(
   query: string | null,
 ): SearchResult[] {
   const isPatternPlugin = plugin !== null && plugin.pluginType === "pattern";
-  const seen = new Set<string>();
+  const seen = new Map<string, { result: SearchResult; hasTab: boolean; hasBookmark: boolean; hasHistory: boolean }>();
   const merged: SearchResult[] = [];
   const q = query ? query.toLowerCase() : null;
 
@@ -162,19 +162,16 @@ export function mergeResults(
     if (plugin && !matchesPlugin(item.url, plugin)) continue;
     if (isPatternPlugin && q && !item.title.toLowerCase().includes(q) && !item.url.toLowerCase().includes(q)) continue;
     const key = urlKey(item.url);
-    if (seen.has(key)) {
-      const existing = merged.find((r) => urlKey(r.url) === key);
-      if (existing) {
-        existing.score += item.score;
-        if (item.visitCount != null) { existing.visitCount = item.visitCount; existing.lastVisitTime = item.lastVisitTime; }
-      }
+    const entry = seen.get(key);
+    if (entry) {
+      if (item.type === "tab" && !entry.hasTab) { entry.result.score += TAB_BONUS; entry.hasTab = true; }
+      if (item.type === "bookmark" && !entry.hasBookmark) { entry.result.score += BOOKMARK_BONUS; entry.hasBookmark = true; }
+      if (item.type === "history" && !entry.hasHistory) { entry.result.score += item.score; entry.hasHistory = true; }
+      if (item.visitCount != null) { entry.result.visitCount = item.visitCount; entry.result.lastVisitTime = item.lastVisitTime; }
       continue;
     }
-    seen.add(key);
-    if (plugin) {
-      item.categoryLabel = plugin.name;
-      item.categoryColor = plugin.color;
-    }
+    if (plugin) { item.categoryLabel = plugin.name; item.categoryColor = plugin.color; }
+    seen.set(key, { result: item, hasTab: item.type === "tab", hasBookmark: item.type === "bookmark", hasHistory: item.type === "history" });
     merged.push(item);
   }
 

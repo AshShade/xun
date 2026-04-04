@@ -179,13 +179,24 @@ describe("mergeResults", () => {
 
   it("deduplicates and combines scores", () => {
     const results = mergeResults(
-      [makeResult("tab", "https://example.com", 100)],
-      [makeResult("bookmark", "https://example.com", 50)],
-      [makeResult("history", "https://example.com", 30)],
+      [makeResult("tab", "https://example.com", TAB_BONUS)],
+      [makeResult("bookmark", "https://example.com", BOOKMARK_BONUS)],
+      [makeResult("history", "https://example.com", 80)],
       null, "example",
     );
     expect(results).toHaveLength(1);
-    expect(results[0]!.score).toBe(180);
+    expect(results[0]!.score).toBe(TAB_BONUS + BOOKMARK_BONUS + 80);
+  });
+
+  it("does not double-count tab or bookmark bonus", () => {
+    const results = mergeResults(
+      [makeResult("tab", "https://a.com", TAB_BONUS), makeResult("tab", "https://a.com?v=2", TAB_BONUS)],
+      [makeResult("bookmark", "https://a.com", BOOKMARK_BONUS), makeResult("bookmark", "https://a.com?v=3", BOOKMARK_BONUS)],
+      [makeResult("history", "https://a.com", 80)],
+      null, "a",
+    );
+    expect(results).toHaveLength(1);
+    expect(results[0]!.score).toBe(TAB_BONUS + BOOKMARK_BONUS + 80);
   });
 
   it("deduplicates URLs that differ only by query params", () => {
@@ -194,7 +205,7 @@ describe("mergeResults", () => {
       makeResult("history", "https://example.com/page?b=2", 30),
     ], null, "page");
     expect(results).toHaveLength(1);
-    expect(results[0]!.score).toBe(80);
+    expect(results[0]!.score).toBe(50); // first variant wins, no double-counting
   });
 
   it("sorts by score descending and caps at 20", () => {
@@ -290,14 +301,14 @@ describe("mergeHistoryCache", () => {
 describe("queryHistory", () => {
   const now = Date.now();
   const cache = new Map<string, HistoryEntry>();
-  cache.set("https://a.com/page?x=1", { url: "https://a.com/page?x=1", title: "Page v1", visitCount: 10, lastVisitTime: now - 2 * 3600000 });
-  cache.set("https://a.com/page?x=2", { url: "https://a.com/page?x=2", title: "Page v2", visitCount: 20, lastVisitTime: now - 2 * 3600000 });
+  cache.set("https://a.com/page?x=1", { url: "https://a.com/page?x=1", title: "Page v1", visitCount: 10, lastVisitTime: now - 4 * 3600000 });
+  cache.set("https://a.com/page?x=2", { url: "https://a.com/page?x=2", title: "Page v2", visitCount: 10, lastVisitTime: now - 1 * 3600000 });
   cache.set("https://b.com", { url: "https://b.com", title: "Other", visitCount: 5, lastVisitTime: now - 3600000 });
 
   it("deduplicates by urlKey, highest score wins", () => {
     const results = queryHistory(cache, "page");
     expect(results).toHaveLength(1);
-    // visitCount 20 > 10 at same lastVisitTime, so ?x=2 variant wins
+    // x=2 visited more recently, so it wins
     expect(results[0]!.url).toBe("https://a.com/page?x=2");
   });
 
