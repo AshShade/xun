@@ -26,9 +26,10 @@ function highlightSelected(): void {
   }
   const preview = overlay.querySelector("#xun-preview") as HTMLElement | undefined;
   if (preview) {
-    const url = selectedIndex >= 0 && results[selectedIndex] ? results[selectedIndex]!.url : "";
-    preview.textContent = url;
-    preview.style.display = url ? "block" : "none";
+    const item = selectedIndex >= 0 ? results[selectedIndex] : null;
+    const label = item ? (item.tabId != null ? "(tab) " : "") + item.url : "";
+    preview.textContent = label;
+    preview.style.display = label ? "block" : "none";
   }
 }
 let activePlugin: Plugin | null = null;
@@ -249,9 +250,10 @@ function renderResults(items: SearchResponse["results"]): void {
 
   const preview = overlay.querySelector("#xun-preview") as HTMLElement | undefined;
   if (preview) {
-    const url = selectedIndex >= 0 && items[selectedIndex] ? items[selectedIndex]!.url : "";
-    preview.textContent = url;
-    preview.style.display = url ? "block" : "none";
+    const item = selectedIndex >= 0 ? items[selectedIndex] : null;
+    const label = item ? (item.tabId != null ? "(tab) " : "") + item.url : "";
+    preview.textContent = label;
+    preview.style.display = label ? "block" : "none";
   }
 }
 
