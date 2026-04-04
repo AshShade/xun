@@ -18,7 +18,12 @@ function highlightSelected(): void {
   const row = container.children[selectedIndex] as HTMLElement | undefined;
   if (row) { row.classList.add("xun-selected"); row.scrollIntoView({ block: "nearest" }); }
   const item = selectedIndex >= 0 ? results[selectedIndex] : null;
-  if (DEV && item) console.log("[xun]", `#${selectedIndex}`, `score=${item.score}`, item.type, item.title, item.url);
+  if (DEV && item) {
+    const v = item.visitCount !== undefined ? item.visitCount : "?";
+    const age = item.lastVisitTime ? ((Date.now() - item.lastVisitTime) / 60000).toFixed(1) + "m ago" : "n/a";
+    const flags = [item.type, item.tabId != null ? "tab" : "", item.visitCount != null ? "hist" : ""].filter(Boolean).join("+");
+    console.log("[xun]", `#${selectedIndex}`, `score=${item.score} visits=${v} age=${age}`, flags, item.title, item.url);
+  }
   const preview = overlay.querySelector("#xun-preview") as HTMLElement | undefined;
   if (preview) {
     const url = selectedIndex >= 0 && results[selectedIndex] ? results[selectedIndex]!.url : "";

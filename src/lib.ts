@@ -121,7 +121,7 @@ export function queryHistory(cache: Map<string, HistoryEntry>, query: string): S
     const score = decayScore(entry.visitCount, entry.lastVisitTime);
     const prev = grouped.get(key);
     if (!prev || score > prev.score) {
-      grouped.set(key, { type: "history", title: entry.title, url: entry.url, score });
+      grouped.set(key, { type: "history", title: entry.title, url: entry.url, score, visitCount: entry.visitCount, lastVisitTime: entry.lastVisitTime });
     }
   }
   return [...grouped.values()];
@@ -164,7 +164,10 @@ export function mergeResults(
     const key = urlKey(item.url);
     if (seen.has(key)) {
       const existing = merged.find((r) => urlKey(r.url) === key);
-      if (existing) existing.score += item.score;
+      if (existing) {
+        existing.score += item.score;
+        if (item.visitCount != null) { existing.visitCount = item.visitCount; existing.lastVisitTime = item.lastVisitTime; }
+      }
       continue;
     }
     seen.add(key);

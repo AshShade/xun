@@ -61,6 +61,8 @@ export interface SearchResult {
   windowId?: number;
   categoryLabel?: string;
   categoryColor?: string;
+  visitCount?: number;
+  lastVisitTime?: number;
 }
 
 export interface ParsedQuery {
