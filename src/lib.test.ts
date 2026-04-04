@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { globMatch, matchesPlugin, parseQuery, recencyBoost, historyScore, mergeResults, urlKey, validateConfig, mergeHistoryCache, queryHistory, queryBookmarks, queryTabs } from "./lib";
+import { globMatch, matchesPlugin, parseQuery, decayScore, TAB_BONUS, BOOKMARK_BONUS, mergeResults, urlKey, validateConfig, mergeHistoryCache, queryHistory, queryBookmarks, queryTabs } from "./lib";
 import type { Config, HistoryEntry, PatternPlugin, SearchPlugin, SearchResult } from "./types";
 
 describe("globMatch", () => {
@@ -48,16 +48,99 @@ describe("parseQuery", () => {
   });
 });
 
-describe("recencyBoost", () => {
-  it("returns 80 for < 1 hour", () => { expect(recencyBoost(Date.now() - 30 * 60 * 1000)).toBe(80); });
-  it("returns 0 for > 7 days", () => { expect(recencyBoost(Date.now() - 8 * 24 * 60 * 60 * 1000)).toBe(0); });
-  it("returns 0 for null", () => { expect(recencyBoost(null)).toBe(0); });
+const hours = (h: number) => Date.now() - h * 60 * 60 * 1000;
+const days = (d: number) => hours(d * 24);
+
+describe("decayScore", () => {
+  it("returns 0 for no visits", () => { expect(decayScore(0, Date.now())).toBe(0); });
+  it("returns 0 for null lastVisitTime", () => { expect(decayScore(10, null)).toBe(0); });
+
+  // Scenario: page just opened should rank high
+  it("just visited page scores high", () => {
+    expect(decayScore(5, Date.now())).toBeGreaterThan(400);
+  });
+
+  // Scenario: decay is steep in first few hours
+  it("score drops significantly after 4 hours", () => {
+    const now = decayScore(10, Date.now());
+    const fourHoursAgo = decayScore(10, hours(4));
+    expect(fourHoursAgo).toBeLessThan(now * 0.6);
+  });
+
+  // Scenario: decay flattens after a week (difference shrinks)
+  it("score difference between 7 and 14 days is small relative to 0-7 day drop", () => {
+    const now = decayScore(50, Date.now());
+    const sevenDays = decayScore(50, days(7));
+    const fourteenDays = decayScore(50, days(14));
+    const firstWeekDrop = now - sevenDays;
+    const secondWeekDrop = sevenDays - fourteenDays;
+    expect(secondWeekDrop).toBeLessThan(firstWeekDrop);
+  });
+
+  // Scenario: 30 days ago is basically zero
+  it("30 day old page scores near zero", () => {
+    expect(decayScore(50, days(30))).toBeLessThan(20);
+  });
 });
 
-describe("historyScore", () => {
-  it("combines visitCount and recency", () => {
-    expect(historyScore(10, null)).toBe(20);
-    expect(historyScore(100, null)).toBe(100); // capped at 50*2
+describe("scoring scenarios", () => {
+  // Scenario 1: recently opened page beats old frequent page
+  it("3 visits just now beats 50 visits from a week ago", () => {
+    const recent = decayScore(3, Date.now());
+    const oldFrequent = decayScore(50, days(7));
+    expect(recent).toBeGreaterThan(oldFrequent);
+  });
+
+  // Scenario 2: frequent page from today still beats rare recent page
+  it("50 visits 4h ago beats 3 visits 10 min ago", () => {
+    const frequent = decayScore(50, hours(4));
+    const rare = decayScore(3, Date.now() - 10 * 60 * 1000);
+    expect(frequent).toBeGreaterThan(rare);
+  });
+
+  // Scenario 3: single visit just now beats 10 visits from 3 days ago
+  it("1 visit just now beats 10 visits from 3 days ago", () => {
+    const justNow = decayScore(1, Date.now());
+    const threeDaysAgo = decayScore(10, days(3));
+    expect(justNow).toBeGreaterThan(threeDaysAgo);
+  });
+
+  // Scenario 4: open tab beats same page without tab open
+  it("open tab bonus gives edge over same history page", () => {
+    const withTab = decayScore(5, hours(2)) + TAB_BONUS;
+    const withoutTab = decayScore(5, hours(2));
+    expect(withTab).toBeGreaterThan(withoutTab);
+  });
+
+  // Scenario 5: bookmark doesn't save a stale page
+  it("stale bookmark loses to single visit today", () => {
+    const staleBookmark = decayScore(0, null) + BOOKMARK_BONUS;
+    const visitToday = decayScore(1, hours(1));
+    expect(visitToday).toBeGreaterThan(staleBookmark);
+  });
+
+  // Scenario 6: bookmarked + visited page gets a small edge
+  it("bookmark bonus gives edge between similar pages", () => {
+    const withBookmark = decayScore(5, hours(2)) + BOOKMARK_BONUS;
+    const withoutBookmark = decayScore(5, hours(2));
+    expect(withBookmark).toBeGreaterThan(withoutBookmark);
+    expect(withBookmark - withoutBookmark).toBe(BOOKMARK_BONUS);
+  });
+
+  // Scenario 7: the original bug — 19 visits just opened vs 33 visits hours ago
+  it("19 visits just opened beats 33 visits from 4 hours ago", () => {
+    const justOpened = decayScore(19, Date.now());
+    const hoursAgo = decayScore(33, hours(4));
+    expect(justOpened).toBeGreaterThan(hoursAgo);
+  });
+
+  // Scenario 8: daily tool open in tab dominates everything
+  it("daily tool in open tab ranks highest", () => {
+    const dailyTool = decayScore(50, Date.now()) + TAB_BONUS + BOOKMARK_BONUS;
+    const recentVisit = decayScore(5, Date.now());
+    const oldFrequent = decayScore(50, days(3));
+    expect(dailyTool).toBeGreaterThan(recentVisit);
+    expect(dailyTool).toBeGreaterThan(oldFrequent);
   });
 });
 
@@ -205,15 +288,16 @@ describe("mergeHistoryCache", () => {
 // ── Query layer tests ──
 
 describe("queryHistory", () => {
+  const now = Date.now();
   const cache = new Map<string, HistoryEntry>();
-  cache.set("https://a.com/page?x=1", { url: "https://a.com/page?x=1", title: "Page v1", visitCount: 10, lastVisitTime: 2000 });
-  cache.set("https://a.com/page?x=2", { url: "https://a.com/page?x=2", title: "Page v2", visitCount: 20, lastVisitTime: 1000 });
-  cache.set("https://b.com", { url: "https://b.com", title: "Other", visitCount: 5, lastVisitTime: 500 });
+  cache.set("https://a.com/page?x=1", { url: "https://a.com/page?x=1", title: "Page v1", visitCount: 10, lastVisitTime: now - 2 * 3600000 });
+  cache.set("https://a.com/page?x=2", { url: "https://a.com/page?x=2", title: "Page v2", visitCount: 20, lastVisitTime: now - 2 * 3600000 });
+  cache.set("https://b.com", { url: "https://b.com", title: "Other", visitCount: 5, lastVisitTime: now - 3600000 });
 
   it("deduplicates by urlKey, highest score wins", () => {
     const results = queryHistory(cache, "page");
     expect(results).toHaveLength(1);
-    // visitCount 20 > 10, so ?x=2 variant wins on score (even though ?x=1 is more recent)
+    // visitCount 20 > 10 at same lastVisitTime, so ?x=2 variant wins
     expect(results[0]!.url).toBe("https://a.com/page?x=2");
   });
 

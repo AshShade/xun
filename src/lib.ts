@@ -43,21 +43,15 @@ export function parseQuery(raw: string, config: Config): ParsedQuery {
   return { query: raw, source: null, plugin: null };
 }
 
-export function recencyBoost(lastVisitTime: number | null | undefined): number {
-  if (!lastVisitTime) return 0;
-  const hoursAgo = (Date.now() - lastVisitTime) / (1000 * 60 * 60);
-  if (hoursAgo < 0.1) return 120;
-  if (hoursAgo < 1) return 80;
-  if (hoursAgo < 4) return 50;
-  if (hoursAgo < 24) return 30;
-  if (hoursAgo < 72) return 20;
-  if (hoursAgo < 168) return 10;
-  return 0;
+export function decayScore(visitCount: number | null | undefined, lastVisitTime: number | null | undefined): number {
+  const v = Math.min(visitCount ?? 0, 50);
+  if (!lastVisitTime || v === 0) return 0;
+  const hours = Math.max(0, (Date.now() - lastVisitTime) / (1000 * 60 * 60));
+  return Math.round(v * Math.exp(-0.3 * Math.sqrt(hours)) * 100);
 }
 
-export function historyScore(visitCount: number | null | undefined, lastVisitTime: number | null | undefined): number {
-  return Math.min(visitCount ?? 0, 50) * 2 + recencyBoost(lastVisitTime);
-}
+export const TAB_BONUS = 150;
+export const BOOKMARK_BONUS = 30;
 
 const DEFAULT_CONFIG: Config = {
   prefixes: { history: "h", tabs: "t", bookmarks: "b" },
@@ -124,7 +118,7 @@ export function queryHistory(cache: Map<string, HistoryEntry>, query: string): S
   for (const entry of cache.values()) {
     if (query && !entry.title.toLowerCase().includes(query.toLowerCase()) && !urlKey(entry.url).toLowerCase().includes(query.toLowerCase())) continue;
     const key = urlKey(entry.url);
-    const score = historyScore(entry.visitCount, entry.lastVisitTime);
+    const score = decayScore(entry.visitCount, entry.lastVisitTime);
     const prev = grouped.get(key);
     if (!prev || score > prev.score) {
       grouped.set(key, { type: "history", title: entry.title, url: entry.url, score });
@@ -141,7 +135,7 @@ export function queryBookmarks(items: BookmarkEntry[], query: string): SearchRes
     const key = urlKey(b.url);
     if (seen.has(key)) continue;
     seen.add(key);
-    results.push({ type: "bookmark", title: b.title, url: b.url, score: 50 });
+    results.push({ type: "bookmark", title: b.title, url: b.url, score: BOOKMARK_BONUS });
   }
   return results;
 }
@@ -149,7 +143,7 @@ export function queryBookmarks(items: BookmarkEntry[], query: string): SearchRes
 export function queryTabs(items: TabEntry[], query: string): SearchResult[] {
   return items.filter((t) =>
     !query || t.title.toLowerCase().includes(query.toLowerCase()) || urlKey(t.url).toLowerCase().includes(query.toLowerCase())
-  ).map((t) => ({ type: "tab" as const, title: t.title, url: t.url, tabId: t.tabId, windowId: t.windowId, score: 100 }));
+  ).map((t) => ({ type: "tab" as const, title: t.title, url: t.url, tabId: t.tabId, windowId: t.windowId, score: TAB_BONUS }));
 }
 
 export function mergeResults(
