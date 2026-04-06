@@ -174,7 +174,8 @@ function onKeydown(e: KeyboardEvent): void {
       const q = currentQuery.trim().split(" ").slice(1).join(" ").trim();
       if (q) navigate({ type: "history", title: "", url: (activePlugin as { url: string }).url.replace("%s", encodeURIComponent(q)), score: 0 }, newTab);
     } else if (currentQuery) {
-      const url = searchEngine.replace("%s", encodeURIComponent(currentQuery.trim()));
+      const q = currentQuery.trim();
+      const url = looksLikeUrl(q) ? (q.includes("://") ? q : "https://" + q) : searchEngine.replace("%s", encodeURIComponent(q));
       navigate({ type: "history", title: "", url, score: 0 }, newTab);
     }
   }
@@ -257,6 +258,13 @@ function renderResults(items: SearchResponse["results"]): void {
   });
 
   updatePreview();
+}
+
+function looksLikeUrl(s: string): boolean {
+  if (s.includes(" ")) return false;
+  if (/^https?:\/\//.test(s)) return true;
+  if (/^\d{1,3}(\.\d{1,3}){3}(\/|:|$)/.test(s)) return true;
+  return /^[^\s]+\.[a-z]{2,}(\/|$)/i.test(s);
 }
 
 function truncateUrl(url: string): string {

@@ -177,3 +177,10 @@ export function mergeResults(
 
   return merged.sort((a, b) => b.score - a.score).slice(0, 20);
 }
+
+export function looksLikeUrl(s: string): boolean {
+  if (s.includes(" ")) return false;
+  if (/^https?:\/\//.test(s)) return true;
+  if (/^\d{1,3}(\.\d{1,3}){3}(\/|:|$)/.test(s)) return true;
+  return /^[^\s]+\.[a-z]{2,}(\/|$)/i.test(s);
+}

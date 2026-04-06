@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { globMatch, matchesPlugin, parseQuery, decayScore, TAB_BONUS, BOOKMARK_BONUS, mergeResults, urlKey, validateConfig, mergeHistoryCache, queryHistory, queryBookmarks, queryTabs } from "./lib";
+import { globMatch, matchesPlugin, parseQuery, decayScore, TAB_BONUS, BOOKMARK_BONUS, mergeResults, urlKey, validateConfig, mergeHistoryCache, queryHistory, queryBookmarks, queryTabs, looksLikeUrl } from "./lib";
 import type { Config, HistoryEntry, PatternPlugin, SearchPlugin, SearchResult } from "./types";
 
 describe("globMatch", () => {
@@ -357,5 +357,29 @@ describe("queryTabs", () => {
   it("preserves tabId and windowId", () => {
     const results = queryTabs(items, "");
     expect(results[0]!.tabId).toBe(1);
+  });
+});
+
+describe("looksLikeUrl", () => {
+  it("matches domain with TLD", () => {
+    expect(looksLikeUrl("github.com")).toBe(true);
+    expect(looksLikeUrl("github.com/user/repo")).toBe(true);
+    expect(looksLikeUrl("docs.example.com")).toBe(true);
+  });
+  it("matches explicit protocol", () => {
+    expect(looksLikeUrl("https://example.com")).toBe(true);
+    expect(looksLikeUrl("http://localhost:3000")).toBe(true);
+  });
+  it("rejects plain words", () => {
+    expect(looksLikeUrl("hello world")).toBe(false);
+    expect(looksLikeUrl("just a search")).toBe(false);
+    expect(looksLikeUrl("react")).toBe(false);
+  });
+  it("rejects dots without valid TLD", () => {
+    expect(looksLikeUrl("file.a")).toBe(false);
+    expect(looksLikeUrl("v1.0")).toBe(false);
+  });
+  it("matches IP-like patterns", () => {
+    expect(looksLikeUrl("192.168.1.1")).toBe(true);
   });
 });
