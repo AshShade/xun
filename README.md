@@ -17,6 +17,7 @@ Spotlight-style search for Firefox — search open tabs, bookmarks, and history 
 - Click a result or click outside to dismiss
 - `Enter` with no result selected searches the web (configurable engine)
 - Full URL shown at bottom-left when a result is selected (like browser link hover)
+- Type a URL directly (e.g. `github.com`) and press `Enter` to navigate — `https://` is added automatically
 
 ## Prefix Filters
 
@@ -85,30 +86,41 @@ If a pattern contains no `/`, `/**` is appended automatically so domain-only pat
 
 ## Ranking
 
-Results are scored by frecency — a combination of visit frequency, recency, and source type — then sorted highest first.
+Results are scored by **frecency + fuzzy match quality**, then sorted highest first.
 
-**Core formula (history):**
+**Final score** = frecency + source bonuses + fuzzy match score
+
+### Frecency (history)
 
 ```
-score = min(visitCount, 10) × e^(-0.3 × √hours) × 100
+min(visitCount, 10) × e^(-0.3 × √hours) × 100
 ```
 
 The exponential decay on `√hours` drops fast in the first few hours, then flattens — a page from 3 hours ago still scores well, but a page from a week ago is nearly gone.
 
-**Source bonuses** (applied once per URL, no double-counting):
+### Source bonuses (applied once per URL, no double-counting)
 
 | Source | Bonus |
 |--------|-------|
 | Open tab | +150 |
 | Bookmark | +30 |
 
-URLs appearing in multiple sources get combined: a bookmarked page open in a tab with history visits gets `historyScore + 150 + 30`.
+### Fuzzy matching
 
-**Design principles:**
+Typing "ghub" matches "GitHub", "gml" matches "Gmail". All characters in the query must appear in order, but don't need to be consecutive. Scoring rewards:
+
+- Consecutive character runs (quadratic bonus: 2, 4, 6, 8...)
+- Word boundary matches — after `/`, `.`, `-`, space, or at start (+3)
+- Penalizes gaps between matched characters (-1)
+
+This means exact substrings and word-boundary matches rank above scattered character matches.
+
+### Design principles
 - Recency dominates — a page visited minutes ago always ranks near the top
 - Frequency is capped at 10 visits — beyond that, recency decides
 - Open tabs get a strong bonus — you have them open for a reason
 - Bookmarks get a small nudge — not enough to save a stale page
+- Better text matches rank higher among results with similar frecency
 
 ## Settings
 
