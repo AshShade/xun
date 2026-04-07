@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { globMatch, matchesPlugin, parseQuery, decayScore, TAB_BONUS, BOOKMARK_BONUS, mergeResults, urlKey, validateConfig, mergeHistoryCache, queryHistory, queryBookmarks, queryTabs, looksLikeUrl } from "./lib";
+import { globMatch, matchesPlugin, parseQuery, decayScore, TAB_BONUS, BOOKMARK_BONUS, fuzzyMatch, mergeResults, urlKey, validateConfig, mergeHistoryCache, queryHistory, queryBookmarks, queryTabs, looksLikeUrl } from "./lib";
 import type { Config, HistoryEntry, PatternPlugin, SearchPlugin, SearchResult } from "./types";
 
 describe("globMatch", () => {
@@ -357,6 +357,31 @@ describe("queryTabs", () => {
   it("preserves tabId and windowId", () => {
     const results = queryTabs(items, "");
     expect(results[0]!.tabId).toBe(1);
+  });
+});
+
+describe("fuzzyMatch", () => {
+  it("matches exact substring", () => {
+    expect(fuzzyMatch("GitHub Repository", "github")).toBeGreaterThan(0);
+  });
+  it("matches fuzzy (non-consecutive chars)", () => {
+    expect(fuzzyMatch("GitHub Repository", "ghrp")).toBeGreaterThan(0);
+  });
+  it("returns 0 for no match", () => {
+    expect(fuzzyMatch("GitHub", "xyz")).toBe(0);
+  });
+  it("scores consecutive matches higher", () => {
+    const consecutive = fuzzyMatch("github.com", "git");
+    const scattered = fuzzyMatch("great ideas today", "git");
+    expect(consecutive).toBeGreaterThan(scattered);
+  });
+  it("scores word-boundary matches higher", () => {
+    const boundary = fuzzyMatch("my-project", "pro");
+    const mid = fuzzyMatch("reproduce", "pro");
+    expect(boundary).toBeGreaterThan(mid);
+  });
+  it("is case insensitive", () => {
+    expect(fuzzyMatch("GitHub", "github")).toBeGreaterThan(0);
   });
 });
 
