@@ -116,6 +116,8 @@ Typing "ghub" matches "GitHub", "gml" matches "Gmail". All characters in the que
 
 This means exact substrings and word-boundary matches rank above scattered character matches.
 
+Matched characters are highlighted in both the title and URL of each result, using the same fuzzy match algorithm. Highlights use Catppuccin Mocha red (`#f38ba8`) with bold weight.
+
 ### Design principles
 - Recency dominates — a page visited minutes ago always ranks near the top
 - Frequency is capped at 10 visits — beyond that, recency decides

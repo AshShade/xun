@@ -114,6 +114,12 @@
   text-overflow: ellipsis;
 }
 
+.xun-title mark, .xun-url mark {
+  background: none;
+  color: #f38ba8;
+  font-weight: bold;
+}
+
 #xun-preview {
   position: fixed !important;
   bottom: 0 !important;

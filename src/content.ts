@@ -2,7 +2,7 @@
 
 import type { Plugin, SearchResponse, Shortcut } from "./types";
 const DEV = true;
-const BUILD = 6;
+const BUILD = 7;
 const VERSION = "0.1.0" + (DEV ? `-b${BUILD}` : "");
 
 // --- Centralized state with granular dispatch ---
@@ -55,10 +55,32 @@ let searchEngine = "https://www.google.com/search?q=%s";
 
 // --- Renderers (registered as listeners below open()) ---
 
+function escHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function highlight(text: string, query: string): string {
+  if (!query) return escHtml(text);
+  const lower = text.toLowerCase(), q = query.toLowerCase();
+  const indices: number[] = [];
+  for (let i = 0, qi = 0; i < lower.length && qi < q.length; i++) {
+    if (lower[i] === q[qi]) { indices.push(i); qi++; }
+  }
+  if (indices.length !== q.length) return escHtml(text);
+  const set = new Set(indices);
+  let out = "";
+  for (let i = 0; i < text.length; i++) {
+    const c = escHtml(text[i]!);
+    out += set.has(i) ? `<mark>${c}</mark>` : c;
+  }
+  return out;
+}
+
 function renderResults(): void {
   const container = overlay!.querySelector<HTMLDivElement>("#xun-results")!;
   container.innerHTML = "";
   container.style.pointerEvents = "none";
+  const q = state.hasPrefix ? currentQuery.trim().split(" ").slice(1).join(" ").trim() : currentQuery.trim();
   state.results.forEach((item, i) => {
     const label = item.categoryLabel || TYPE_LABELS[item.type] || item.type;
     const color = item.categoryColor || state.sourceColors[TYPE_SOURCE_MAP[item.type] ?? ""] || "#a6adc8";
@@ -78,11 +100,11 @@ function renderResults(): void {
 
     const titleSpan = document.createElement("span");
     titleSpan.className = "xun-title";
-    titleSpan.textContent = item.title;
+    titleSpan.innerHTML = highlight(item.title, q);
 
     const urlSpan = document.createElement("span");
     urlSpan.className = "xun-url";
-    urlSpan.textContent = item.url;
+    urlSpan.innerHTML = highlight(item.url, q);
 
     textDiv.appendChild(titleSpan);
     textDiv.appendChild(urlSpan);
