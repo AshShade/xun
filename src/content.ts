@@ -2,7 +2,7 @@
 
 import type { Plugin, SearchResponse, Shortcut } from "./types";
 const DEV = true;
-const BUILD = 9;
+const BUILD = 12;
 const VERSION = "0.1.0" + (DEV ? `-b${BUILD}` : "");
 
 // --- Centralized state with granular dispatch ---
