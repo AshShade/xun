@@ -274,7 +274,7 @@ function open(): void {
     const c = overlay?.querySelector<HTMLDivElement>("#xun-results");
     if (c) c.style.pointerEvents = "auto";
   });
-  document.addEventListener("keydown", onKeydown);
+  document.addEventListener("keydown", onKeydown, true);
 
   // Register listeners: each renderer subscribes to its relevant state keys
   on(["results", "sourceColors"], renderResults);
@@ -293,7 +293,7 @@ function close(): void {
   currentQuery = "";
   state = { results: [], selectedIndex: -1, hasPrefix: false, activePlugin: null, source: null, sourceColors: state.sourceColors, mode: "normal", ghost: "" };
   for (const k of Object.keys(listeners) as StateKey[]) delete listeners[k];
-  document.removeEventListener("keydown", onKeydown);
+  document.removeEventListener("keydown", onKeydown, true);
 }
 
 // --- Input handler ---
@@ -345,6 +345,7 @@ function onInput(e: Event): void {
 
 // --- Keyboard handler ---
 function onKeydown(e: KeyboardEvent): void {
+  e.stopPropagation();
   if (e.key === "Escape") { close(); e.preventDefault(); return; }
   // Accept ghost text with Tab or → (only when cursor is at end)
   if (state.ghost && (e.key === "Tab" || e.key === "ArrowRight")) {

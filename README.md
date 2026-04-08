@@ -6,8 +6,12 @@ Spotlight-style search for Firefox — search open tabs, bookmarks, and history 
 
 ## Install
 
-1. Open Firefox → `about:debugging` → This Firefox → Load Temporary Add-on
-2. Select `manifest.json` from this directory
+**From AMO** (recommended): [addons.mozilla.org](https://addons.mozilla.org/) — search "Xun" or install by extension ID `xun@AshShade`.
+
+**From source** (development):
+1. Clone the repo and run `npm install && npm run build -- --build=1`
+2. Open Firefox → `about:debugging` → This Firefox → Load Temporary Add-on
+3. Select `manifest.json` from the project root
 
 ## Usage
 
@@ -149,25 +153,34 @@ Click the toolbar icon to configure:
 |------|------|
 | `content.ts` | UI controller — Shadow DOM isolation, centralized state with pub/sub dispatch, DOM rendering, event handlers |
 | `background.ts` | Search engine — in-memory caches (history, bookmarks, tabs), query processing |
-| `lib.ts` | Pure functions — scoring (frecency + fuzzy match), cache builders, config validation |
+| `lib.ts` | Pure functions — scoring (frecency + fuzzy match), cache builders, config validation with migration |
 | `dom.ts` | DOM helpers — `buildResultRow`, `highlightIndex`, `hexToRgba`, `truncateUrl` |
 | `types.ts` | Shared TypeScript type definitions |
+| `options.ts` | Settings page — shortcut config, prefix/plugin management, search engine |
+| `editor.ts` | Full-tab JSON config editor with docs panel |
+| `build.js` | Build preprocessor — version injection, `#IF_DEV` block stripping, export removal |
 | `xun.css` | All styles (Catppuccin Mocha theme) |
 
 ### State management
 
-`content.ts` uses a lightweight pub/sub pattern. A single `State` object holds all UI state (`results`, `selectedIndex`, `hasPrefix`, `activePlugin`, `source`, `sourceColors`). Renderers subscribe to specific state keys via `on(keys, fn)`. When `setState(patch)` is called, only renderers subscribed to the changed keys fire — no full re-renders.
+`content.ts` uses a lightweight pub/sub pattern. A single `State` object holds all UI state (`results`, `selectedIndex`, `hasPrefix`, `activePlugin`, `source`, `sourceColors`, `mode`, `ghost`). Renderers subscribe to specific state keys via `on(keys, fn)`. When `setState(patch)` is called, only renderers subscribed to the changed keys fire — no full re-renders.
 
 ## Development
 
 ```bash
 npm install
-npm run build        # dev build (includes debug logging)
-npm run build:prod   # prod build (strips debug logging)
-npm run check        # type-check + run tests
-npm run coverage     # tests with coverage report
+npm run build -- --build=1   # dev build → 0.2.0-b1 (includes debug logging)
+npm run build:release        # release build → 0.2.0 (strips #IF_DEV blocks)
+npm run check                # type-check + run tests
+npm run coverage             # tests with coverage report
 ```
 
-Load in Firefox: `about:debugging` → This Firefox → Load Temporary Add-on → select `manifest.json`. Reload after changes.
+### Build preprocessor
 
-Dev builds include `DEV` mode: selecting a result logs its score breakdown (visit count, recency, source type) to the browser console.
+`build.js` post-processes compiled JS:
+- Injects version from `package.json` (replaces `__VERSION__` placeholder)
+- Dev builds append `-bN` suffix, release builds use plain semver
+- Release builds strip code between `// #IF_DEV` and `// #END_IF_DEV` markers
+- Syncs `manifest.json` version from `package.json`
+
+Load in Firefox: `about:debugging` → This Firefox → Load Temporary Add-on → select `manifest.json`. Reload after changes.
