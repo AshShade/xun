@@ -133,6 +133,21 @@ Click the toolbar icon to configure:
 - **Search engine** — URL with `%s` placeholder (default: Google)
 - **Edit config as JSON** — opens a full-tab JSON editor with docs panel
 
+## Architecture
+
+| File | Role |
+|------|------|
+| `content.ts` | UI controller — centralized state with pub/sub dispatch, DOM rendering, event handlers |
+| `background.ts` | Search engine — in-memory caches (history, bookmarks, tabs), query processing |
+| `lib.ts` | Pure functions — scoring (frecency + fuzzy match), cache builders, config validation |
+| `dom.ts` | DOM helpers — `buildResultRow`, `highlightIndex`, `hexToRgba`, `truncateUrl` |
+| `types.ts` | Shared TypeScript type definitions |
+| `xun.css` | All styles (Catppuccin Mocha theme) |
+
+### State management
+
+`content.ts` uses a lightweight pub/sub pattern. A single `State` object holds all UI state (`results`, `selectedIndex`, `hasPrefix`, `activePlugin`, `source`, `sourceColors`). Renderers subscribe to specific state keys via `on(keys, fn)`. When `setState(patch)` is called, only renderers subscribed to the changed keys fire — no full re-renders.
+
 ## Development
 
 ```bash

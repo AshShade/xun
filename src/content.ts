@@ -2,10 +2,10 @@
 
 import type { Plugin, SearchResponse, Shortcut } from "./types";
 const DEV = true;
-const BUILD = 2;
+const BUILD = 6;
 const VERSION = "0.1.0" + (DEV ? `-b${BUILD}` : "");
 
-// --- Centralized state ---
+// --- Centralized state with granular dispatch ---
 interface State {
   results: SearchResponse["results"];
   selectedIndex: number;
@@ -24,9 +24,27 @@ let state: State = {
   sourceColors: { tabs: "#89b4fa", bookmarks: "#f9e2af", history: "#a6e3a1" },
 };
 
+type StateKey = keyof State;
+type Listener = () => void;
+const listeners: Partial<Record<StateKey, Listener[]>> = {};
+
+function on(keys: StateKey[], fn: Listener): void {
+  for (const k of keys) (listeners[k] ??= []).push(fn);
+}
+
 function setState(patch: Partial<State>): void {
+  if (!overlay) return;
+  const changed = new Set<StateKey>();
+  for (const k of Object.keys(patch) as StateKey[]) {
+    if (state[k] !== (patch as State)[k]) changed.add(k);
+  }
   Object.assign(state, patch);
-  render();
+  const fired = new Set<Listener>();
+  for (const k of changed) {
+    for (const fn of listeners[k] ?? []) {
+      if (!fired.has(fn)) { fired.add(fn); fn(); }
+    }
+  }
 }
 
 // --- DOM refs ---
@@ -35,14 +53,7 @@ let currentQuery = "";
 let deepTimer: ReturnType<typeof setTimeout> | null = null;
 let searchEngine = "https://www.google.com/search?q=%s";
 
-// --- Render: single function drives all UI from state ---
-function render(): void {
-  if (!overlay) return;
-  renderResults();
-  renderSelection();
-  renderPreview();
-  renderPluginLabel();
-}
+// --- Renderers (registered as listeners below open()) ---
 
 function renderResults(): void {
   const container = overlay!.querySelector<HTMLDivElement>("#xun-results")!;
@@ -189,6 +200,12 @@ function open(): void {
     if (c) c.style.pointerEvents = "auto";
   });
   document.addEventListener("keydown", onKeydown);
+
+  // Register listeners: each renderer subscribes to its relevant state keys
+  on(["results", "sourceColors"], renderResults);
+  on(["selectedIndex"], renderSelection);
+  on(["selectedIndex", "results"], renderPreview);
+  on(["activePlugin", "source", "sourceColors"], renderPluginLabel);
 }
 
 function close(): void {
@@ -197,6 +214,8 @@ function close(): void {
   overlay = null;
   currentQuery = "";
   state = { results: [], selectedIndex: -1, hasPrefix: false, activePlugin: null, source: null, sourceColors: state.sourceColors };
+  // Clear all listeners
+  for (const k of Object.keys(listeners) as StateKey[]) delete listeners[k];
   document.removeEventListener("keydown", onKeydown);
 }
 
