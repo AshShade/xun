@@ -181,10 +181,6 @@ function open(): void {
   input.focus();
   input.addEventListener("input", onInput);
   overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
-  overlay.addEventListener("wheel", (e) => {
-    const results = overlay?.querySelector("#xun-results");
-    if (!results?.contains(e.target as Node)) e.preventDefault();
-  }, { passive: false });
   overlay.addEventListener("mousemove", () => {
     const c = overlay?.querySelector<HTMLDivElement>("#xun-results");
     if (c) c.style.pointerEvents = "auto";
