@@ -59,7 +59,7 @@ describe("buildResultRow", () => {
     expect(row.className).toBe("xun-result");
     expect(row.querySelector(".xun-type")!.textContent).toBe("History");
     expect(row.querySelector(".xun-title")!.textContent).toBe("My Page");
-    expect(row.querySelector(".xun-url")!.textContent).toBe("example.com");
+    expect(row.querySelector(".xun-url")!.textContent).toBe("https://example.com/page");
   });
 
   it("adds xun-selected class when isSelected is true", () => {
@@ -98,19 +98,28 @@ describe("hexToRgba", () => {
 });
 
 describe("truncateUrl", () => {
-  it("shows hostname only", () => {
-    expect(truncateUrl("https://example.com/page")).toBe("example.com");
+  it("returns full URL", () => {
+    expect(truncateUrl("https://example.com/page")).toBe("https://example.com/page");
   });
 
-  it("strips trailing slash", () => {
-    expect(truncateUrl("https://example.com/")).toBe("example.com");
+  it("preserves trailing slash", () => {
+    expect(truncateUrl("https://example.com/")).toBe("https://example.com/");
   });
 
-  it("strips query params", () => {
-    expect(truncateUrl("https://example.com/page?a=1")).toBe("example.com");
+  it("preserves query params", () => {
+    expect(truncateUrl("https://example.com/page?a=1")).toBe("https://example.com/page?a=1");
   });
 
   it("handles invalid URLs", () => {
     expect(truncateUrl("not-a-url")).toBe("not-a-url");
+  });
+});
+
+describe("buildResultRow", () => {
+  it("shows full URL in .xun-url span", () => {
+    const item: SearchResult = { url: "https://github.com/user/repo", title: "Repo", type: "history", score: 10 };
+    const row = buildResultRow(item, 0, false, {});
+    const urlEl = row.querySelector(".xun-url") as HTMLElement;
+    expect(urlEl.textContent).toBe("https://github.com/user/repo");
   });
 });

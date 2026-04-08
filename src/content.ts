@@ -15,9 +15,8 @@ function updatePreview(): void {
   const preview = overlay.querySelector("#xun-preview") as HTMLElement | undefined;
   if (!preview) return;
   const item = selectedIndex >= 0 ? results[selectedIndex] : null;
-  const label = item ? (item.tabId != null ? "(tab) " : "") + item.url : "";
-  preview.textContent = label;
-  preview.style.display = label ? "block" : "none";
+  preview.textContent = item ? (item.tabId != null ? "(tab) " : "") + item.url : "";
+  preview.style.display = item ? "block" : "none";
 }
 
 function highlightSelected(): void {
@@ -88,7 +87,7 @@ function open(): void {
       </div>
       <div id="xun-results"></div>
     </div>
-    <div id="xun-preview"></div>
+    <div id="xun-preview" style="display:none"></div>
   `;
   document.documentElement.appendChild(overlay);
   const input = overlay.querySelector<HTMLInputElement>("#xun-input")!;
@@ -124,6 +123,7 @@ function onInput(e: Event): void {
   if (!hasSpace && trimmed.length < 2) {
     results = [];
     hasPrefix = false;
+    selectedIndex = -1;
     renderResults([]);
     if (overlay) updatePluginLabel(null, null);
     return;
@@ -217,8 +217,6 @@ function renderResults(items: SearchResponse["results"]): void {
   container.innerHTML = "";
   container.style.pointerEvents = "none";
   if (!items.length) {
-    const preview = overlay.querySelector("#xun-preview") as HTMLElement | undefined;
-    if (preview) { preview.textContent = ""; preview.style.display = "none"; }
     return;
   }
 
@@ -236,6 +234,9 @@ function renderResults(items: SearchResponse["results"]): void {
     typeSpan.style.background = hexToRgba(color, 0.15);
     typeSpan.style.color = color;
 
+    const textDiv = document.createElement("div");
+    textDiv.className = "xun-text";
+
     const titleSpan = document.createElement("span");
     titleSpan.className = "xun-title";
     titleSpan.textContent = item.title;
@@ -244,9 +245,11 @@ function renderResults(items: SearchResponse["results"]): void {
     urlSpan.className = "xun-url";
     urlSpan.textContent = truncateUrl(item.url);
 
+    textDiv.appendChild(titleSpan);
+    textDiv.appendChild(urlSpan);
+
     row.appendChild(typeSpan);
-    row.appendChild(titleSpan);
-    row.appendChild(urlSpan);
+    row.appendChild(textDiv);
 
     row.addEventListener("click", (ev) => { navigate(items[i]!, isMac ? ev.metaKey : ev.ctrlKey); });
     row.addEventListener("mouseenter", () => {
@@ -256,7 +259,6 @@ function renderResults(items: SearchResponse["results"]): void {
 
     container.appendChild(row);
   });
-
   updatePreview();
 }
 
@@ -268,9 +270,7 @@ function looksLikeUrl(s: string): boolean {
 }
 
 function truncateUrl(url: string): string {
-  try {
-    return new URL(url).hostname;
-  } catch { return url.slice(0, 40); }
+  return url;
 }
 
 function hexToRgba(hex: string, alpha: number): string {

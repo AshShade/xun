@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { globMatch, matchesPlugin, parseQuery, decayScore, TAB_BONUS, BOOKMARK_BONUS, fuzzyMatch, mergeResults, urlKey, validateConfig, mergeHistoryCache, queryHistory, queryBookmarks, queryTabs, looksLikeUrl } from "./lib";
+import { truncateUrl, buildResultRow } from "./dom";
 import type { Config, HistoryEntry, PatternPlugin, SearchPlugin, SearchResult } from "./types";
 
 describe("globMatch", () => {
@@ -406,5 +407,14 @@ describe("looksLikeUrl", () => {
   });
   it("matches IP-like patterns", () => {
     expect(looksLikeUrl("192.168.1.1")).toBe(true);
+  });
+});
+
+describe("truncateUrl", () => {
+  it("returns full URL unchanged", () => {
+    expect(truncateUrl("https://github.com/user/repo")).toBe("https://github.com/user/repo");
+  });
+  it("returns raw string for invalid URLs", () => {
+    expect(truncateUrl("not-a-url")).toBe("not-a-url");
   });
 });

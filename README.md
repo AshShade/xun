@@ -16,6 +16,7 @@ Spotlight-style search for Firefox — search open tabs, bookmarks, and history 
 - `↑`/`↓` to navigate, `Enter` to go, `Esc` to close
 - Click a result or click outside to dismiss
 - `Enter` with no result selected searches the web (configurable engine)
+- Each result shows title on top, full URL below — no truncated hostnames
 - Full URL shown at bottom-left when a result is selected (like browser link hover)
 - Type a URL directly (e.g. `github.com`) and press `Enter` to navigate — `https://` is added automatically
 

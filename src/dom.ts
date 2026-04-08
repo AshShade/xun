@@ -8,9 +8,7 @@ export function hexToRgba(hex: string, alpha: number): string {
 }
 
 export function truncateUrl(url: string): string {
-  try {
-    return new URL(url).hostname;
-  } catch { return url.slice(0, 40); }
+  return url;
 }
 
 const TYPE_LABELS: Record<string, string> = { tab: "Tab", bookmark: "Bookmark", history: "History" };
@@ -39,6 +37,9 @@ export function buildResultRow(
   typeSpan.style.background = hexToRgba(color, 0.15);
   typeSpan.style.color = color;
 
+  const textDiv = document.createElement("div");
+  textDiv.className = "xun-text";
+
   const titleSpan = document.createElement("span");
   titleSpan.className = "xun-title";
   titleSpan.textContent = item.title;
@@ -47,9 +48,11 @@ export function buildResultRow(
   urlSpan.className = "xun-url";
   urlSpan.textContent = truncateUrl(item.url);
 
+  textDiv.appendChild(titleSpan);
+  textDiv.appendChild(urlSpan);
+
   row.appendChild(typeSpan);
-  row.appendChild(titleSpan);
-  row.appendChild(urlSpan);
+  row.appendChild(textDiv);
 
   return row;
 }
