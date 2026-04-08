@@ -94,17 +94,17 @@ Results are scored by **frecency + fuzzy match quality**, then sorted highest fi
 ### Frecency (history)
 
 ```
-min(visitCount, 10) × e^(-0.3 × √hours) × 100
+log₂(visitCount + 1) × e^(-0.3 × √hours) × 150
 ```
 
-The exponential decay on `√hours` drops fast in the first few hours, then flattens — a page from 3 hours ago still scores well, but a page from a week ago is nearly gone.
+Visit count uses a log scale — diminishing returns so 755 visits scores ~3× higher than 8 visits, not the same. The exponential decay on `√hours` drops fast in the first few hours, then flattens — a page from 3 hours ago still scores well, but a page from a week ago is nearly gone.
 
 ### Source bonuses (applied once per URL, no double-counting)
 
 | Source | Bonus |
 |--------|-------|
-| Open tab | +150 |
-| Bookmark | +30 |
+| Open tab | +300 |
+| Bookmark | +50 |
 
 ### Fuzzy matching
 
@@ -127,8 +127,8 @@ Matched terms are highlighted in both the title and URL of each result. Highligh
 Wrap query in `"quotes"` to force normal mode (e.g. `"github.com"` searches instead of navigating).
 
 ### Design principles
+- Frequency uses log scale — 755 visits matters more than 8, but not 94× more
 - Recency dominates — a page visited minutes ago always ranks near the top
-- Frequency is capped at 10 visits — beyond that, recency decides
 - Open tabs get a strong bonus — you have them open for a reason
 - Bookmarks get a small nudge — not enough to save a stale page
 - Better text matches rank higher among results with similar frecency

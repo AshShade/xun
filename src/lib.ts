@@ -44,14 +44,14 @@ export function parseQuery(raw: string, config: Config): ParsedQuery {
 }
 
 export function decayScore(visitCount: number | null | undefined, lastVisitTime: number | null | undefined): number {
-  const v = Math.min(visitCount ?? 0, 10);
+  const v = Math.log2((visitCount ?? 0) + 1);
   if (!lastVisitTime || v === 0) return 0;
   const hours = Math.max(0, (Date.now() - lastVisitTime) / (1000 * 60 * 60));
-  return Math.round(v * Math.exp(-0.3 * Math.sqrt(hours)) * 100);
+  return Math.round(v * Math.exp(-0.3 * Math.sqrt(hours)) * 150);
 }
 
-export const TAB_BONUS = 150;
-export const BOOKMARK_BONUS = 30;
+export const TAB_BONUS = 300;
+export const BOOKMARK_BONUS = 50;
 
 const BOUNDARY = /[/\s.\-_]/;
 function isBoundary(s: string, i: number): boolean { return i === 0 || BOUNDARY.test(s[i - 1]!); }

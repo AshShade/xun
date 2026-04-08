@@ -56,19 +56,24 @@ describe("decayScore", () => {
   it("returns 0 for no visits", () => { expect(decayScore(0, Date.now())).toBe(0); });
   it("returns 0 for null lastVisitTime", () => { expect(decayScore(10, null)).toBe(0); });
 
-  // Scenario: page just opened should rank high
   it("just visited page scores high", () => {
-    expect(decayScore(5, Date.now())).toBeGreaterThan(400);
+    expect(decayScore(5, Date.now())).toBeGreaterThan(300);
   });
 
-  // Scenario: decay is steep in first few hours
+  it("more visits scores higher at same recency", () => {
+    expect(decayScore(100, Date.now())).toBeGreaterThan(decayScore(10, Date.now()));
+  });
+
+  it("high visits no longer capped — 755 beats 8 at similar recency", () => {
+    expect(decayScore(755, hours(7))).toBeGreaterThan(decayScore(8, hours(2)));
+  });
+
   it("score drops significantly after 4 hours", () => {
     const now = decayScore(10, Date.now());
     const fourHoursAgo = decayScore(10, hours(4));
     expect(fourHoursAgo).toBeLessThan(now * 0.6);
   });
 
-  // Scenario: decay flattens after a week (difference shrinks)
   it("score difference between 7 and 14 days is small relative to 0-7 day drop", () => {
     const now = decayScore(50, Date.now());
     const sevenDays = decayScore(50, days(7));
@@ -78,7 +83,6 @@ describe("decayScore", () => {
     expect(secondWeekDrop).toBeLessThan(firstWeekDrop);
   });
 
-  // Scenario: 30 days ago is basically zero
   it("30 day old page scores near zero", () => {
     expect(decayScore(50, days(30))).toBeLessThan(20);
   });
