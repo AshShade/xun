@@ -186,7 +186,6 @@ function open(): void {
     if (c) c.style.pointerEvents = "auto";
   });
   document.addEventListener("keydown", onKeydown);
-  document.body.style.overflow = "hidden";
 }
 
 function close(): void {
@@ -196,7 +195,6 @@ function close(): void {
   currentQuery = "";
   state = { results: [], selectedIndex: -1, hasPrefix: false, activePlugin: null, source: null, sourceColors: state.sourceColors };
   document.removeEventListener("keydown", onKeydown);
-  document.body.style.overflow = "";
 }
 
 // --- Input handler ---
