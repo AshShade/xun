@@ -133,3 +133,12 @@
   text-overflow: ellipsis;
   z-index: 2147483647;
 }
+
+#xun-version {
+  position: fixed;
+  bottom: 4px;
+  right: 8px;
+  font-size: 10px;
+  color: #45475a;
+  z-index: 2147483647;
+}

@@ -2,6 +2,8 @@
 
 import type { Plugin, SearchResponse, Shortcut } from "./types";
 const DEV = true;
+const BUILD = 2;
+const VERSION = "0.1.0" + (DEV ? `-b${BUILD}` : "");
 
 // --- Centralized state ---
 interface State {
@@ -175,6 +177,7 @@ function open(): void {
       <div id="xun-results"></div>
     </div>
     <div id="xun-preview" style="display:none"></div>
+    <span id="xun-version">${VERSION}</span>
   `;
   document.documentElement.appendChild(overlay);
   const input = overlay.querySelector<HTMLInputElement>("#xun-input")!;
