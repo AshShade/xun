@@ -108,15 +108,13 @@ The exponential decay on `√hours` drops fast in the first few hours, then flat
 
 ### Fuzzy matching
 
-Typing "ghub" matches "GitHub", "gml" matches "Gmail". All characters in the query must appear in order, but don't need to be consecutive. Scoring rewards:
+Queries are split into space-separated terms. Each term must appear as a substring in the title or URL. For example, `work pkg` matches `workspace/examples/a-example-pkg` because `work` and `pkg` both appear. Scoring rewards:
 
-- Consecutive character runs (quadratic bonus: 2, 4, 6, 8...)
-- Word boundary matches — after `/`, `.`, `-`, space, or at start (+3)
-- Penalizes gaps between matched characters (-1)
+- Longer matched terms (+2 per character)
+- Word boundary matches — term starts after `/`, `.`, `-`, `_`, space, or at start (+3)
+- Near-exact matches — term covers most of the string (+5)
 
-This means exact substrings and word-boundary matches rank above scattered character matches.
-
-Matched characters are highlighted in both the title and URL of each result, using the same fuzzy match algorithm. Highlights use Catppuccin Mocha red (`#f38ba8`) with bold weight.
+Matched terms are highlighted in both the title and URL of each result. Highlights use Catppuccin Mocha red (`#f38ba8`) with bold weight.
 
 ### Design principles
 - Recency dominates — a page visited minutes ago always ranks near the top

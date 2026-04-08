@@ -53,24 +53,23 @@ export function decayScore(visitCount: number | null | undefined, lastVisitTime:
 export const TAB_BONUS = 150;
 export const BOOKMARK_BONUS = 30;
 
-/** Fuzzy match: returns score > 0 if all chars in query appear in str in order. */
+const BOUNDARY = /[/\s.\-_]/;
+function isBoundary(s: string, i: number): boolean { return i === 0 || BOUNDARY.test(s[i - 1]!); }
+
+/** Word-level fuzzy match: every query term must appear as a substring. */
 export function fuzzyMatch(str: string, query: string): number {
+  const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (!terms.length) return 0;
   const s = str.toLowerCase();
-  const q = query.toLowerCase();
-  let qi = 0, score = 0, consecutive = 0, lastMatchIdx = -1;
-  for (let i = 0; i < s.length && qi < q.length; i++) {
-    if (s[i] === q[qi]) {
-      qi++;
-      consecutive++;
-      score += consecutive * 2;
-      if (i === 0 || s[i - 1] === "/" || s[i - 1] === " " || s[i - 1] === "." || s[i - 1] === "-") score += 3;
-      if (lastMatchIdx >= 0 && i - lastMatchIdx > 1) score -= 1;
-      lastMatchIdx = i;
-    } else {
-      consecutive = 0;
-    }
+  let score = 0;
+  for (const term of terms) {
+    const idx = s.indexOf(term);
+    if (idx < 0) return 0;
+    score += term.length * 2;
+    if (isBoundary(s, idx)) score += 3;
+    if (s.length - term.length < 3) score += 5; // near-exact match bonus
   }
-  return qi === q.length ? score : 0;
+  return score;
 }
 
 function textMatch(title: string, url: string, query: string): number {

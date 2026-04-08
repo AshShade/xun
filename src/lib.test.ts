@@ -343,12 +343,12 @@ describe("queryBookmarks", () => {
 
 describe("queryTabs", () => {
   const items = [
-    { url: "https://a.com", title: "Tab A", tabId: 1, windowId: 1 },
-    { url: "https://b.com", title: "Tab B", tabId: 2, windowId: 1 },
+    { url: "https://a.com", title: "Alpha Page", tabId: 1, windowId: 1 },
+    { url: "https://b.com", title: "Beta Page", tabId: 2, windowId: 1 },
   ];
 
   it("filters by query", () => {
-    expect(queryTabs(items, "Tab A")).toHaveLength(1);
+    expect(queryTabs(items, "Alpha")).toHaveLength(1);
   });
 
   it("returns all for empty query", () => {
@@ -365,16 +365,14 @@ describe("fuzzyMatch", () => {
   it("matches exact substring", () => {
     expect(fuzzyMatch("GitHub Repository", "github")).toBeGreaterThan(0);
   });
-  it("matches fuzzy (non-consecutive chars)", () => {
-    expect(fuzzyMatch("GitHub Repository", "ghrp")).toBeGreaterThan(0);
+  it("matches multiple words", () => {
+    expect(fuzzyMatch("workspace/examples/a-example-pkg", "work pkg")).toBeGreaterThan(0);
   });
-  it("returns 0 for no match", () => {
+  it("returns 0 when a term is missing", () => {
     expect(fuzzyMatch("GitHub", "xyz")).toBe(0);
   });
-  it("scores consecutive matches higher", () => {
-    const consecutive = fuzzyMatch("github.com", "git");
-    const scattered = fuzzyMatch("great ideas today", "git");
-    expect(consecutive).toBeGreaterThan(scattered);
+  it("returns 0 when one of multiple terms is missing", () => {
+    expect(fuzzyMatch("GitHub Repository", "github xyz")).toBe(0);
   });
   it("scores word-boundary matches higher", () => {
     const boundary = fuzzyMatch("my-project", "pro");

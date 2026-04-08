@@ -2,7 +2,7 @@
 
 import type { Plugin, SearchResponse, Shortcut } from "./types";
 const DEV = true;
-const BUILD = 7;
+const BUILD = 8;
 const VERSION = "0.1.0" + (DEV ? `-b${BUILD}` : "");
 
 // --- Centralized state with granular dispatch ---
@@ -61,18 +61,21 @@ function escHtml(s: string): string {
 
 function highlight(text: string, query: string): string {
   if (!query) return escHtml(text);
-  const lower = text.toLowerCase(), q = query.toLowerCase();
-  const indices: number[] = [];
-  for (let i = 0, qi = 0; i < lower.length && qi < q.length; i++) {
-    if (lower[i] === q[qi]) { indices.push(i); qi++; }
+  const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (!terms.length) return escHtml(text);
+  const lower = text.toLowerCase();
+  const marks = new Uint8Array(text.length);
+  for (const term of terms) {
+    const idx = lower.indexOf(term);
+    if (idx >= 0) for (let i = idx; i < idx + term.length; i++) marks[i] = 1;
   }
-  if (indices.length !== q.length) return escHtml(text);
-  const set = new Set(indices);
-  let out = "";
+  let out = "", inMark = false;
   for (let i = 0; i < text.length; i++) {
-    const c = escHtml(text[i]!);
-    out += set.has(i) ? `<mark>${c}</mark>` : c;
+    if (marks[i] && !inMark) { out += "<mark>"; inMark = true; }
+    else if (!marks[i] && inMark) { out += "</mark>"; inMark = false; }
+    out += escHtml(text[i]!);
   }
+  if (inMark) out += "</mark>";
   return out;
 }
 
