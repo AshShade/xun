@@ -1,12 +1,11 @@
 {
   "name": "xun",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "license": "MIT",
   "private": true,
   "scripts": {
-    "build": "npm run build:dev",
-    "build:dev": "tsc && node -e \"const fs=require('fs'),p=require('path'),d='dist';fs.readdirSync(d).filter(f=>f.endsWith('.js')).forEach(f=>{const fp=p.join(d,f);fs.writeFileSync(fp,fs.readFileSync(fp,'utf8').replace(/^export /gm,''))})\"",
-    "build:prod": "tsc && node -e \"const fs=require('fs'),p=require('path'),d='dist';fs.readdirSync(d).filter(f=>f.endsWith('.js')).forEach(f=>{const fp=p.join(d,f);fs.writeFileSync(fp,fs.readFileSync(fp,'utf8').replace(/^export /gm,'').replace(/const DEV = true/g,'const DEV = false'))})\"",
+    "build": "tsc && node build.js",
+    "build:release": "tsc && node build.js --release",
     "test": "vitest run",
     "test:watch": "vitest",
     "coverage": "vitest run --coverage",

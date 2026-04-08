@@ -1,9 +1,7 @@
 // Content script: injects Xun overlay into the page
 
 import type { Plugin, SearchResponse, Shortcut } from "./types";
-const DEV = true;
-const BUILD = 14;
-const VERSION = "0.1.0" + (DEV ? `-b${BUILD}` : "");
+const VERSION = "__VERSION__";
 
 // --- Centralized state with granular dispatch ---
 type Mode = "normal" | "plugin" | "address";
@@ -165,15 +163,15 @@ function renderSelection(): void {
   container.querySelectorAll(".xun-selected").forEach((el) => el.classList.remove("xun-selected"));
   const row = container.children[state.selectedIndex] as HTMLElement | undefined;
   if (row) { row.classList.add("xun-selected"); row.scrollIntoView({ block: "nearest" }); }
-  if (DEV) {
-    const item = state.selectedIndex >= 0 ? state.results[state.selectedIndex] : null;
-    if (item) {
-      const v = item.visitCount !== undefined ? item.visitCount : "?";
-      const age = item.lastVisitTime ? ((Date.now() - item.lastVisitTime) / 60000).toFixed(1) + "m ago" : "n/a";
-      const flags = [item.type, item.tabId != null ? "tab" : "", item.visitCount != null ? "hist" : ""].filter(Boolean).join("+");
-      console.log("[xun]", `#${state.selectedIndex}`, `score=${item.score} visits=${v} age=${age}`, flags, item.title, item.url);
-    }
+  // #IF_DEV
+  const item = state.selectedIndex >= 0 ? state.results[state.selectedIndex] : null;
+  if (item) {
+    const v = item.visitCount !== undefined ? item.visitCount : "?";
+    const age = item.lastVisitTime ? ((Date.now() - item.lastVisitTime) / 60000).toFixed(1) + "m ago" : "n/a";
+    const flags = [item.type, item.tabId != null ? "tab" : "", item.visitCount != null ? "hist" : ""].filter(Boolean).join("+");
+    console.log("[xun]", `#${state.selectedIndex}`, `score=${item.score} visits=${v} age=${age}`, flags, item.title, item.url);
   }
+  // #END_IF_DEV
 }
 
 function renderPreview(): void {
