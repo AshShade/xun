@@ -116,6 +116,16 @@ Queries are split into space-separated terms. Each term must appear as a substri
 
 Matched terms are highlighted in both the title and URL of each result. Highlights use Catppuccin Mocha red (`#f38ba8`) with bold weight.
 
+### Input modes
+
+| Mode | Trigger | Behavior |
+|------|---------|----------|
+| **Normal** | Default | Word-level fuzzy search across tabs, bookmarks, history |
+| **Plugin** | First word matches a plugin prefix | Filters results by plugin patterns |
+| **Address** | No spaces + contains `.`, `/`, or `://` | Ghost text auto-completion from top matching URL. Press Tab or → to accept |
+
+Wrap query in `"quotes"` to force normal mode (e.g. `"github.com"` searches instead of navigating).
+
 ### Design principles
 - Recency dominates — a page visited minutes ago always ranks near the top
 - Frequency is capped at 10 visits — beyond that, recency decides

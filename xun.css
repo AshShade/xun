@@ -46,6 +46,37 @@
   caret-color: #cba6f7;
 }
 
+#xun-input-wrap {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+#xun-input-wrap input {
+  width: 100%;
+}
+
+#xun-ghost-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+  font-size: 18px;
+  white-space: pre;
+}
+
+#xun-ghost-mirror {
+  visibility: hidden;
+}
+
+#xun-ghost {
+  color: #585b70;
+}
+
 #xun-input::placeholder {
   color: #6c7086;
 }

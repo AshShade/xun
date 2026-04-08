@@ -2,10 +2,11 @@
 
 import type { Plugin, SearchResponse, Shortcut } from "./types";
 const DEV = true;
-const BUILD = 8;
+const BUILD = 9;
 const VERSION = "0.1.0" + (DEV ? `-b${BUILD}` : "");
 
 // --- Centralized state with granular dispatch ---
+type Mode = "normal" | "plugin" | "address";
 interface State {
   results: SearchResponse["results"];
   selectedIndex: number;
@@ -13,6 +14,8 @@ interface State {
   activePlugin: Plugin | null;
   source: string | null;
   sourceColors: Record<string, string>;
+  mode: Mode;
+  ghost: string;
 }
 
 let state: State = {
@@ -22,6 +25,8 @@ let state: State = {
   activePlugin: null,
   source: null,
   sourceColors: { tabs: "#89b4fa", bookmarks: "#f9e2af", history: "#a6e3a1" },
+  mode: "normal",
+  ghost: "",
 };
 
 type StateKey = keyof State;
@@ -52,6 +57,38 @@ let overlay: HTMLDivElement | null = null;
 let currentQuery = "";
 let deepTimer: ReturnType<typeof setTimeout> | null = null;
 let searchEngine = "https://www.google.com/search?q=%s";
+
+// --- Mode detection ---
+function detectMode(): Mode {
+  if (state.activePlugin) return "plugin";
+  const q = currentQuery.trim();
+  if (q.startsWith('"') && q.endsWith('"')) return "normal";
+  if (!q.includes(" ") && (/[./]/.test(q) || q.includes("://"))) return "address";
+  return "normal";
+}
+
+function computeGhost(): string {
+  if (state.mode !== "address" || !state.results.length) return "";
+  const q = currentQuery.toLowerCase();
+  // Find first result URL that starts with what user typed (with or without protocol)
+  for (const r of state.results) {
+    const url = r.url.toLowerCase();
+    if (url.startsWith(q)) return r.url.slice(currentQuery.length);
+    const bare = url.replace(/^https?:\/\//, "");
+    if (bare.startsWith(q)) return bare.slice(currentQuery.length);
+    // Also try without www.
+    const noWww = bare.replace(/^www\./, "");
+    if (noWww.startsWith(q)) return noWww.slice(currentQuery.length);
+  }
+  return "";
+}
+
+function renderGhost(): void {
+  const ghost = overlay!.querySelector<HTMLSpanElement>("#xun-ghost")!;
+  const mirror = overlay!.querySelector<HTMLSpanElement>("#xun-ghost-mirror")!;
+  ghost.textContent = state.ghost;
+  mirror.textContent = currentQuery;
+}
 
 // --- Renderers (registered as listeners below open()) ---
 
@@ -207,7 +244,10 @@ function open(): void {
     <div id="xun-modal">
       <div id="xun-input-row">
         <span id="xun-icon">寻</span>
-        <input id="xun-input" type="text" placeholder="Search tabs, bookmarks, history..." autocomplete="off" spellcheck="false" />
+        <div id="xun-input-wrap">
+          <div id="xun-ghost-layer"><span id="xun-ghost-mirror"></span><span id="xun-ghost"></span></div>
+          <input id="xun-input" type="text" placeholder="Search tabs, bookmarks, history..." autocomplete="off" spellcheck="false" />
+        </div>
         <span id="xun-plugin-label"></span>
       </div>
       <div id="xun-results"></div>
@@ -231,6 +271,7 @@ function open(): void {
   on(["selectedIndex"], renderSelection);
   on(["selectedIndex", "results"], renderPreview);
   on(["activePlugin", "source", "sourceColors"], renderPluginLabel);
+  on(["ghost"], renderGhost);
 }
 
 function close(): void {
@@ -238,7 +279,7 @@ function close(): void {
   overlay.remove();
   overlay = null;
   currentQuery = "";
-  state = { results: [], selectedIndex: -1, hasPrefix: false, activePlugin: null, source: null, sourceColors: state.sourceColors };
+  state = { results: [], selectedIndex: -1, hasPrefix: false, activePlugin: null, source: null, sourceColors: state.sourceColors, mode: "normal", ghost: "" };
   // Clear all listeners
   for (const k of Object.keys(listeners) as StateKey[]) delete listeners[k];
   document.removeEventListener("keydown", onKeydown);
@@ -251,12 +292,15 @@ function onInput(e: Event): void {
 
   const hasSpace = currentQuery.includes(" ");
   const trimmed = currentQuery.trim();
+  // Strip surrounding quotes for forced normal mode search
+  const searchQuery = (trimmed.startsWith('"') && trimmed.endsWith('"') && trimmed.length > 1)
+    ? trimmed.slice(1, -1) : trimmed;
 
   if (!hasSpace && trimmed.length < 2) {
-    setState({ results: [], hasPrefix: false, selectedIndex: -1, activePlugin: null, source: null });
+    setState({ results: [], hasPrefix: false, selectedIndex: -1, activePlugin: null, source: null, mode: "normal", ghost: "" });
     return;
   }
-  browser.runtime.sendMessage({ type: "search", query: trimmed }).then((raw: unknown) => {
+  browser.runtime.sendMessage({ type: "search", query: searchQuery }).then((raw: unknown) => {
     const res = raw as SearchResponse;
     setState({
       results: res.results,
@@ -266,9 +310,11 @@ function onInput(e: Event): void {
       sourceColors: res.sourceColors,
       selectedIndex: res.hasPrefix && res.results.length > 0 ? 0 : -1,
     });
+    const mode = detectMode();
+    setState({ mode, ghost: mode === "address" ? computeGhost() : "" });
   });
   deepTimer = setTimeout(() => {
-    browser.runtime.sendMessage({ type: "deep-search", query: trimmed }).then((raw: unknown) => {
+    browser.runtime.sendMessage({ type: "deep-search", query: searchQuery }).then((raw: unknown) => {
       const res = raw as SearchResponse;
       if (currentQuery.trim() !== trimmed) return;
       const prevSelected = state.selectedIndex;
@@ -280,6 +326,8 @@ function onInput(e: Event): void {
         sourceColors: res.sourceColors,
         selectedIndex: prevSelected >= 0 ? Math.min(prevSelected, res.results.length - 1) : -1,
       });
+      const mode = detectMode();
+      setState({ mode, ghost: mode === "address" ? computeGhost() : "" });
     });
   }, 300);
 }
@@ -287,6 +335,17 @@ function onInput(e: Event): void {
 // --- Keyboard handler ---
 function onKeydown(e: KeyboardEvent): void {
   if (e.key === "Escape") { close(); e.preventDefault(); return; }
+  // Accept ghost text with Tab or → (only when cursor is at end)
+  if (state.ghost && (e.key === "Tab" || e.key === "ArrowRight")) {
+    const input = overlay!.querySelector<HTMLInputElement>("#xun-input")!;
+    if (input.selectionStart === input.value.length) {
+      e.preventDefault();
+      input.value = currentQuery + state.ghost;
+      currentQuery = input.value;
+      onInput({ target: input } as unknown as Event);
+      return;
+    }
+  }
   if (e.key === "ArrowDown") {
     setState({ selectedIndex: Math.min(state.selectedIndex + 1, state.results.length - 1) });
     e.preventDefault();

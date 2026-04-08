@@ -6,7 +6,7 @@ Ideas and future features — not committed to, just captured so they don't get 
 - [ ] Functional plugins — plugins that compute and display results inline instead of filtering URLs (e.g. calculator: type `calc 2+3` → shows `5`, clipboard copy on Enter)
 
 ## Search
-- [ ] Auto-suggest / auto-complete — show completions as you type based on top result
+- [x] Auto-suggest / auto-complete — ghost text in address mode, Tab/→ to accept
 
 ## UI
 - [ ] Dark/light theme toggle (currently Catppuccin Mocha only)
