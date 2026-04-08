@@ -10,7 +10,7 @@ Ideas and future features — not committed to, just captured so they don't get 
 
 ## UI
 - [ ] Dark/light theme toggle (currently Catppuccin Mocha only)
-- [ ] Style isolation — overlay looks broken on some pages, likely global CSS leaking in (reset/scope all styles)
+- [x] Style isolation — Shadow DOM encapsulation
 
 ## Keyboard
 - [ ] Shortcut conflicts — Cmd+K doesn't work on some pages, possibly other extensions intercepting the event before Xun

@@ -2,7 +2,7 @@
 
 import type { Plugin, SearchResponse, Shortcut } from "./types";
 const DEV = true;
-const BUILD = 12;
+const BUILD = 13;
 const VERSION = "0.1.0" + (DEV ? `-b${BUILD}` : "");
 
 // --- Centralized state with granular dispatch ---
@@ -53,6 +53,8 @@ function setState(patch: Partial<State>): void {
 }
 
 // --- DOM refs ---
+let host: HTMLDivElement | null = null;
+let shadow: ShadowRoot | null = null;
 let overlay: HTMLDivElement | null = null;
 let currentQuery = "";
 let deepTimer: ReturnType<typeof setTimeout> | null = null;
@@ -230,7 +232,7 @@ browser.runtime.onMessage.addListener((msg: { type: string }) => {
 });
 
 // --- Open / Close / Toggle ---
-function toggle(): void { overlay ? close() : open(); }
+function toggle(): void { host ? close() : open(); }
 
 function open(): void {
   browser.runtime.sendMessage({ type: "refresh-cache" });
@@ -238,6 +240,15 @@ function open(): void {
     const c = raw as { searchEngine?: string };
     if (c.searchEngine) searchEngine = c.searchEngine;
   });
+  host = document.createElement("div");
+  host.id = "xun-host";
+  shadow = host.attachShadow({ mode: "open" });
+
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.href = browser.runtime.getURL("xun.css");
+  shadow.appendChild(link);
+
   overlay = document.createElement("div");
   overlay.id = "xun-overlay";
   overlay.innerHTML = `
@@ -255,7 +266,8 @@ function open(): void {
     <div id="xun-preview" style="display:none"></div>
     <span id="xun-version">${VERSION}</span>
   `;
-  document.documentElement.appendChild(overlay);
+  shadow.appendChild(overlay);
+  document.documentElement.appendChild(host);
   const input = overlay.querySelector<HTMLInputElement>("#xun-input")!;
   input.focus();
   input.addEventListener("input", onInput);
@@ -275,12 +287,13 @@ function open(): void {
 }
 
 function close(): void {
-  if (!overlay) return;
-  overlay.remove();
+  if (!host) return;
+  host.remove();
+  host = null;
+  shadow = null;
   overlay = null;
   currentQuery = "";
   state = { results: [], selectedIndex: -1, hasPrefix: false, activePlugin: null, source: null, sourceColors: state.sourceColors, mode: "normal", ghost: "" };
-  // Clear all listeners
   for (const k of Object.keys(listeners) as StateKey[]) delete listeners[k];
   document.removeEventListener("keydown", onKeydown);
 }

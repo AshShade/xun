@@ -147,7 +147,7 @@ Click the toolbar icon to configure:
 
 | File | Role |
 |------|------|
-| `content.ts` | UI controller — centralized state with pub/sub dispatch, DOM rendering, event handlers |
+| `content.ts` | UI controller — Shadow DOM isolation, centralized state with pub/sub dispatch, DOM rendering, event handlers |
 | `background.ts` | Search engine — in-memory caches (history, bookmarks, tabs), query processing |
 | `lib.ts` | Pure functions — scoring (frecency + fuzzy match), cache builders, config validation |
 | `dom.ts` | DOM helpers — `buildResultRow`, `highlightIndex`, `hexToRgba`, `truncateUrl` |
