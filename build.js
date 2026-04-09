@@ -4,10 +4,8 @@ const fs = require("fs");
 const path = require("path");
 
 const release = process.argv.includes("--release");
-const buildArg = process.argv.find(a => a.startsWith("--build="));
-if (!release && !buildArg) { console.error("Dev build requires --build=N (e.g. --build=3)"); process.exit(1); }
 const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
-const version = release ? pkg.version : `${pkg.version}-b${buildArg.split("=")[1]}`;
+const version = release ? pkg.version : `${pkg.version}-b${String(Math.random() * 10000 | 0).padStart(4, "0")}`;
 
 // 1. Update manifest.json version
 const manifest = JSON.parse(fs.readFileSync("manifest.json", "utf8"));

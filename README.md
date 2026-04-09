@@ -9,7 +9,7 @@ Spotlight-style search for Firefox — search open tabs, bookmarks, and history 
 **From AMO** (recommended): [addons.mozilla.org](https://addons.mozilla.org/) — search "Xun" or install by extension ID `xun@AshShade`.
 
 **From source** (development):
-1. Clone the repo and run `npm install && npm run build -- --build=1`
+1. Clone the repo and run `npm install && npm run build`
 2. Open Firefox → `about:debugging` → This Firefox → Load Temporary Add-on
 3. Select `manifest.json` from the project root
 
@@ -169,7 +169,7 @@ Click the toolbar icon to configure:
 
 ```bash
 npm install
-npm run build -- --build=1   # dev build → 0.2.0-b1 (includes debug logging)
+npm run build                # dev build → 0.2.0-b7382 (random suffix, includes debug logging)
 npm run build:release        # release build → 0.2.0 (strips #IF_DEV blocks)
 npm run check                # type-check + run tests
 npm run coverage             # tests with coverage report
@@ -179,7 +179,7 @@ npm run coverage             # tests with coverage report
 
 `build.js` post-processes compiled JS:
 - Injects version from `package.json` (replaces `__VERSION__` placeholder)
-- Dev builds append `-bN` suffix, release builds use plain semver
+- Dev builds append `-bNNNN` random suffix, release builds use plain semver
 - Release builds strip code between `// #IF_DEV` and `// #END_IF_DEV` markers
 - Syncs `manifest.json` version from `package.json`
 
