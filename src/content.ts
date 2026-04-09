@@ -275,6 +275,8 @@ function open(): void {
     if (c) c.style.pointerEvents = "auto";
   });
   document.addEventListener("keydown", onKeydown, true);
+  document.addEventListener("keyup", stopEvent, true);
+  document.addEventListener("keypress", stopEvent, true);
 
   // Register listeners: each renderer subscribes to its relevant state keys
   on(["results", "sourceColors"], renderResults);
@@ -294,6 +296,8 @@ function close(): void {
   state = { results: [], selectedIndex: -1, hasPrefix: false, activePlugin: null, source: null, sourceColors: state.sourceColors, mode: "normal", ghost: "" };
   for (const k of Object.keys(listeners) as StateKey[]) delete listeners[k];
   document.removeEventListener("keydown", onKeydown, true);
+  document.removeEventListener("keyup", stopEvent, true);
+  document.removeEventListener("keypress", stopEvent, true);
 }
 
 // --- Input handler ---
@@ -344,6 +348,8 @@ function onInput(e: Event): void {
 }
 
 // --- Keyboard handler ---
+function stopEvent(e: Event): void { e.stopPropagation(); }
+
 function onKeydown(e: KeyboardEvent): void {
   e.stopPropagation();
   if (e.key === "Escape") { close(); e.preventDefault(); return; }
