@@ -139,9 +139,9 @@ export function queryHistory(cache: Map<string, HistoryEntry>, query: string): S
   // Dedup by urlKey — highest scoring variant wins
   const grouped = new Map<string, SearchResult>();
   for (const entry of cache.values()) {
-    if (query && !textMatch(entry.title, urlKey(entry.url), query)) continue;
+    if (query && !textMatch(entry.title, entry.url, query)) continue;
     const key = urlKey(entry.url);
-    const score = decayScore(entry.visitCount, entry.lastVisitTime) + textMatch(entry.title, urlKey(entry.url), query);
+    const score = decayScore(entry.visitCount, entry.lastVisitTime) + textMatch(entry.title, entry.url, query);
     const prev = grouped.get(key);
     if (!prev || score > prev.score) {
       grouped.set(key, { type: "history", title: entry.title, url: entry.url, score, visitCount: entry.visitCount, lastVisitTime: entry.lastVisitTime });
@@ -154,7 +154,7 @@ export function queryBookmarks(items: BookmarkEntry[], query: string): SearchRes
   const seen = new Set<string>();
   const results: SearchResult[] = [];
   for (const b of items) {
-    if (query && !textMatch(b.title, urlKey(b.url), query)) continue;
+    if (query && !textMatch(b.title, b.url, query)) continue;
     const key = urlKey(b.url);
     if (seen.has(key)) continue;
     seen.add(key);
@@ -165,8 +165,8 @@ export function queryBookmarks(items: BookmarkEntry[], query: string): SearchRes
 
 export function queryTabs(items: TabEntry[], query: string): SearchResult[] {
   return items.filter((t) =>
-    !query || textMatch(t.title, urlKey(t.url), query) > 0
-  ).map((t) => ({ type: "tab" as const, title: t.title, url: t.url, tabId: t.tabId, windowId: t.windowId, score: TAB_BONUS + textMatch(t.title, urlKey(t.url), query) }));
+    !query || textMatch(t.title, t.url, query) > 0
+  ).map((t) => ({ type: "tab" as const, title: t.title, url: t.url, tabId: t.tabId, windowId: t.windowId, score: TAB_BONUS + textMatch(t.title, t.url, query) }));
 }
 
 export function mergeResults(
