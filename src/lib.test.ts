@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { globMatch, matchesPlugin, parseQuery, decayScore, TAB_BONUS, BOOKMARK_BONUS, fuzzyMatch, mergeResults, urlKey, validateConfig, mergeHistoryCache, queryHistory, queryBookmarks, queryTabs, looksLikeUrl } from "./lib";
+import { globMatch, matchesPlugin, parseQuery, decayScore, TAB_BONUS, BOOKMARK_BONUS, fuzzyMatch, mergeResults, urlKey, validateConfig, mergeHistoryCache, queryHistory, queryBookmarks, queryTabs, looksLikeUrl, computeExpression } from "./lib";
 import { truncateUrl, buildResultRow } from "./dom";
 import type { Config, HistoryEntry, PatternPlugin, SearchPlugin, SearchResult } from "./types";
 
@@ -418,5 +418,40 @@ describe("truncateUrl", () => {
   });
   it("returns raw string for invalid URLs", () => {
     expect(truncateUrl("not-a-url")).toBe("not-a-url");
+  });
+});
+
+describe("computeExpression", () => {
+  it("evaluates basic arithmetic", () => {
+    expect(computeExpression("2 + 3")).toBe("5");
+    expect(computeExpression("10 * 5")).toBe("50");
+    expect(computeExpression("100 / 4")).toBe("25");
+  });
+  it("handles exponents via ^", () => {
+    expect(computeExpression("2^10")).toBe("1024");
+  });
+  it("handles percentages", () => {
+    expect(computeExpression("15% * 200")).toBe("30");
+  });
+  it("returns null for invalid input", () => {
+    expect(computeExpression("")).toBeNull();
+    expect(computeExpression("hello")).toBeNull();
+    expect(computeExpression("alert(1)")).toBeNull();
+  });
+  it("returns null for non-finite results", () => {
+    expect(computeExpression("1/0")).toBeNull();
+  });
+});
+
+describe("validateConfig rejects / prefixes", () => {
+  it("filters out plugins with / prefix", () => {
+    const config = validateConfig({
+      plugins: [
+        { name: "Good", prefix: "g", pluginType: "search", url: "http://x.com?q=%s", color: "#fff" },
+        { name: "Bad", prefix: "/bad", pluginType: "search", url: "http://x.com?q=%s", color: "#fff" },
+      ],
+    });
+    expect(config.plugins).toHaveLength(1);
+    expect(config.plugins[0]!.name).toBe("Good");
   });
 });

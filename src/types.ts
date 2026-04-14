@@ -78,3 +78,8 @@ export interface SearchResponse {
   plugin: Plugin | null;
   source: string | null;
 }
+
+// Functional plugin protocol (content ↔ background)
+export interface FnMatch { name: string; prefix: string; color: string; }
+export interface FnResult { label: string; value: string; color: string; action: "copy" | "fill"; }
+export interface FnResponse { match: FnMatch | null; results: FnResult[]; }

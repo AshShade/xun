@@ -104,6 +104,7 @@ export function validateConfig(raw: unknown): Config {
     if (!p || typeof p !== "object") return false;
     const pl = p as Record<string, unknown>;
     return !!pl["name"] && typeof pl["name"] === "string" && !!pl["prefix"] && typeof pl["prefix"] === "string"
+      && !String(pl["prefix"]).startsWith("/")
       && (pl["pluginType"] === "pattern" || pl["pluginType"] === "search");
   });
 
@@ -206,4 +207,14 @@ export function looksLikeUrl(s: string): boolean {
   if (/^https?:\/\//.test(s)) return true;
   if (/^\d{1,3}(\.\d{1,3}){3}(\/|:|$)/.test(s)) return true;
   return /^[^\s]+\.[a-z]{2,}(\/|$)/i.test(s);
+}
+
+export function computeExpression(expr: string): string | null {
+  if (!expr.trim() || !/^[\d\s+\-*/().,%^e]+$/i.test(expr)) return null;
+  try {
+    const sanitized = expr.replace(/\^/g, "**").replace(/%/g, "/100");
+    const result = new Function(`"use strict"; return (${sanitized})`)() as unknown;
+    if (typeof result !== "number" || !isFinite(result)) return null;
+    return Number.isInteger(result) ? String(result) : result.toFixed(10).replace(/\.?0+$/, "");
+  } catch { return null; }
 }

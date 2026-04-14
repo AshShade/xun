@@ -1,10 +1,11 @@
 // Content script: injects Xun overlay into the page
 
 import type { Plugin, SearchResponse, Shortcut } from "./types";
+import type { FnMatch, FnResult, FnResponse } from "./types";
 const VERSION = "__VERSION__";
 
 // --- Centralized state with granular dispatch ---
-type Mode = "normal" | "plugin" | "address";
+type Mode = "normal" | "plugin" | "address" | "functional";
 interface State {
   results: SearchResponse["results"];
   selectedIndex: number;
@@ -14,6 +15,9 @@ interface State {
   sourceColors: Record<string, string>;
   mode: Mode;
   ghost: string;
+  functionalResults: FnResult[];
+  functionalPlugin: FnMatch | null;
+  functionalListing: boolean;
 }
 
 let state: State = {
@@ -25,6 +29,9 @@ let state: State = {
   sourceColors: { tabs: "#89b4fa", bookmarks: "#f9e2af", history: "#a6e3a1" },
   mode: "normal",
   ghost: "",
+  functionalResults: [],
+  functionalPlugin: null,
+  functionalListing: false,
 };
 
 type StateKey = keyof State;
@@ -60,6 +67,7 @@ let searchEngine = "https://www.google.com/search?q=%s";
 
 // --- Mode detection ---
 function detectMode(): Mode {
+  if (state.functionalListing || state.functionalPlugin) return "functional";
   if (state.activePlugin) return "plugin";
   const q = currentQuery.trim();
   if (q.startsWith('"') && q.endsWith('"')) return "normal";
@@ -184,8 +192,18 @@ function renderPreview(): void {
 
 function renderPluginLabel(): void {
   const label = overlay!.querySelector<HTMLSpanElement>("#xun-plugin-label")!;
-  const { activePlugin: plugin, source } = state;
-  if (plugin) {
+  const { activePlugin: plugin, source, functionalPlugin: fp, functionalListing } = state;
+  if (fp) {
+    label.textContent = fp.name;
+    label.style.background = hexToRgba(fp.color, 0.15);
+    label.style.color = fp.color;
+    label.style.display = "inline-block";
+  } else if (functionalListing) {
+    label.textContent = "Functions";
+    label.style.background = hexToRgba("#cba6f7", 0.15);
+    label.style.color = "#cba6f7";
+    label.style.display = "inline-block";
+  } else if (plugin) {
     const color = plugin.color || "#a6adc8";
     label.textContent = plugin.name;
     label.style.background = hexToRgba(color, 0.15);
@@ -201,6 +219,43 @@ function renderPluginLabel(): void {
     label.style.display = "none";
     label.textContent = "";
   }
+}
+
+function renderFunctionalResults(): void {
+  const container = overlay!.querySelector<HTMLDivElement>("#xun-results")!;
+  container.innerHTML = "";
+  container.style.pointerEvents = "none";
+  state.functionalResults.forEach((item, i) => {
+    const row = document.createElement("div");
+    row.className = "xun-result" + (i === state.selectedIndex ? " xun-selected" : "");
+    row.dataset["index"] = String(i);
+
+    const typeSpan = document.createElement("span");
+    typeSpan.className = "xun-type";
+    typeSpan.textContent = item.label;
+    typeSpan.style.background = hexToRgba(item.color, 0.15);
+    typeSpan.style.color = item.color;
+
+    const textDiv = document.createElement("div");
+    textDiv.className = "xun-text";
+    const titleSpan = document.createElement("span");
+    titleSpan.className = "xun-title";
+    titleSpan.textContent = item.value;
+    textDiv.appendChild(titleSpan);
+
+    row.appendChild(typeSpan);
+    row.appendChild(textDiv);
+    row.addEventListener("click", () => {
+      if (item.action === "copy") { navigator.clipboard.writeText(item.value); close(); }
+      else {
+        const input = overlay!.querySelector<HTMLInputElement>("#xun-input")!;
+        input.value = item.label + " ";
+        input.dispatchEvent(new Event("input"));
+      }
+    });
+    row.addEventListener("mouseenter", () => { setState({ selectedIndex: i }); });
+    container.appendChild(row);
+  });
 }
 
 // --- Keyboard shortcut ---
@@ -282,8 +337,9 @@ function open(): void {
   on(["results", "sourceColors"], renderResults);
   on(["selectedIndex"], renderSelection);
   on(["selectedIndex", "results"], renderPreview);
-  on(["activePlugin", "source", "sourceColors"], renderPluginLabel);
+  on(["activePlugin", "source", "sourceColors", "functionalPlugin", "functionalListing"], renderPluginLabel);
   on(["ghost"], renderGhost);
+  on(["functionalResults"], renderFunctionalResults);
 }
 
 function close(): void {
@@ -293,7 +349,7 @@ function close(): void {
   shadow = null;
   overlay = null;
   currentQuery = "";
-  state = { results: [], selectedIndex: -1, hasPrefix: false, activePlugin: null, source: null, sourceColors: state.sourceColors, mode: "normal", ghost: "" };
+  state = { results: [], selectedIndex: -1, hasPrefix: false, activePlugin: null, source: null, sourceColors: state.sourceColors, mode: "normal", ghost: "", functionalResults: [], functionalPlugin: null, functionalListing: false };
   for (const k of Object.keys(listeners) as StateKey[]) delete listeners[k];
   document.removeEventListener("keydown", onKeydown, true);
   document.removeEventListener("keyup", stopEvent, true);
@@ -305,14 +361,30 @@ function onInput(e: Event): void {
   currentQuery = (e.target as HTMLInputElement).value;
   if (deepTimer) clearTimeout(deepTimer);
 
-  const hasSpace = currentQuery.includes(" ");
   const trimmed = currentQuery.trim();
+
+  // Functional plugin mode — delegate to background
+  if (trimmed.startsWith("/")) {
+    browser.runtime.sendMessage({ type: "fn", query: trimmed }).then((res: unknown) => {
+      const r = res as FnResponse | undefined;
+      if (!r) return;
+      setState({
+        results: [], hasPrefix: true, activePlugin: null, source: null,
+        functionalPlugin: r.match ?? null, functionalListing: !r.match,
+        functionalResults: r.results,
+        selectedIndex: r.results.length > 0 ? 0 : -1, mode: "functional", ghost: "",
+      });
+    }).catch(() => {/* background not ready */});
+    return;
+  }
+
+  const hasSpace = currentQuery.includes(" ");
   // Strip surrounding quotes for forced normal mode search
   const searchQuery = (trimmed.startsWith('"') && trimmed.endsWith('"') && trimmed.length > 1)
     ? trimmed.slice(1, -1) : trimmed;
 
   if (!hasSpace && trimmed.length < 2) {
-    setState({ results: [], hasPrefix: false, selectedIndex: -1, activePlugin: null, source: null, mode: "normal", ghost: "" });
+    setState({ results: [], hasPrefix: false, selectedIndex: -1, activePlugin: null, source: null, mode: "normal", ghost: "", functionalResults: [], functionalPlugin: null, functionalListing: false });
     return;
   }
   browser.runtime.sendMessage({ type: "search", query: searchQuery }).then((raw: unknown) => {
@@ -324,6 +396,7 @@ function onInput(e: Event): void {
       source: res.source,
       sourceColors: res.sourceColors,
       selectedIndex: res.hasPrefix && res.results.length > 0 ? 0 : -1,
+      functionalResults: [], functionalPlugin: null, functionalListing: false,
     });
     const mode = detectMode();
     setState({ mode, ghost: mode === "address" ? computeGhost() : "" });
@@ -340,6 +413,7 @@ function onInput(e: Event): void {
         source: res.source,
         sourceColors: res.sourceColors,
         selectedIndex: prevSelected >= 0 ? Math.min(prevSelected, res.results.length - 1) : -1,
+        functionalResults: [], functionalPlugin: null, functionalListing: false,
       });
       const mode = detectMode();
       setState({ mode, ghost: mode === "address" ? computeGhost() : "" });
@@ -364,14 +438,26 @@ function onKeydown(e: KeyboardEvent): void {
       return;
     }
   }
+  const maxIdx = state.mode === "functional" ? state.functionalResults.length - 1 : state.results.length - 1;
   if (e.key === "ArrowDown") {
-    setState({ selectedIndex: Math.min(state.selectedIndex + 1, state.results.length - 1) });
+    setState({ selectedIndex: Math.min(state.selectedIndex + 1, maxIdx) });
     e.preventDefault();
   } else if (e.key === "ArrowUp") {
     setState({ selectedIndex: Math.max(state.selectedIndex - 1, state.hasPrefix ? 0 : -1) });
     e.preventDefault();
   } else if (e.key === "Enter") {
     e.preventDefault();
+    // Functional mode — copy result or select plugin
+    if (state.mode === "functional" && state.selectedIndex >= 0 && state.functionalResults[state.selectedIndex]) {
+      const fr = state.functionalResults[state.selectedIndex]!;
+      if (fr.action === "copy") { navigator.clipboard.writeText(fr.value); close(); }
+      else {
+        const input = overlay!.querySelector<HTMLInputElement>("#xun-input")!;
+        input.value = fr.label + " ";
+        input.dispatchEvent(new Event("input"));
+      }
+      return;
+    }
     const newTab = isMac ? e.metaKey : e.ctrlKey;
     if (state.selectedIndex >= 0 && state.results[state.selectedIndex]) {
       navigate(state.results[state.selectedIndex]!, newTab);

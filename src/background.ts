@@ -11,7 +11,9 @@ declare const queryHistory: typeof import("./lib").queryHistory;
 declare const queryBookmarks: typeof import("./lib").queryBookmarks;
 declare const queryTabs: typeof import("./lib").queryTabs;
 
-import type { BookmarkEntry, Config, HistoryEntry, SearchResponse, TabEntry } from "./types";
+declare const computeExpression: typeof import("./lib").computeExpression;
+
+import type { BookmarkEntry, Config, FnResponse, HistoryEntry, SearchResponse, TabEntry } from "./types";
 
 let config: Config = { ...DEFAULT_CONFIG };
 browser.storage.local.get("config").then(({ config: c }: { config?: unknown }) => {
@@ -45,9 +47,14 @@ interface SearchMessage { type: "search"; query: string }
 interface DeepSearchMessage { type: "deep-search"; query: string }
 interface RefreshMessage { type: "refresh-cache" }
 interface GetConfigMessage { type: "get-config" }
-type Message = NavigateMessage | SearchMessage | DeepSearchMessage | RefreshMessage | GetConfigMessage;
+interface FnMessage { type: "fn"; query: string }
+type Message = NavigateMessage | SearchMessage | DeepSearchMessage | RefreshMessage | GetConfigMessage | FnMessage;
 
-browser.runtime.onMessage.addListener((msg: Message, sender: browser.runtime.MessageSender, sendResponse: (response: SearchResponse | Config) => void) => {
+browser.runtime.onMessage.addListener((msg: Message, sender: browser.runtime.MessageSender, sendResponse: (response: SearchResponse | Config | FnResponse) => void) => {
+  if (msg.type === "fn") {
+    sendResponse(handleFn(msg.query));
+    return false;
+  }
   if (msg.type === "refresh-cache") {
     refreshCaches().then(() => sendResponse({ results: [], hasPrefix: false, sourceColors: config.sourceColors, plugin: null, source: null }));
     return true;
@@ -106,4 +113,51 @@ async function deepSearch(raw: string): Promise<SearchResponse> {
   mergeHistoryCache(historyCache, apiResults);
 
   return handleSearch(raw);
+}
+
+// --- Functional plugins ---
+interface FnPlugin {
+  name: string;
+  prefix: string;
+  description: string;
+  color: string;
+  run(query: string): FnResponse["results"];
+}
+
+const fnPlugins: FnPlugin[] = [
+  {
+    name: "Compute", prefix: "/compute", description: "Evaluate math expressions", color: "#f9e2af",
+    run(q) {
+      if (!q) return [{ label: "Compute", value: "e.g. 2^10, 15%*200, (3+4)*5", color: this.color, action: "fill" as const }];
+      const r = computeExpression(q);
+      return r ? [{ label: "=", value: r, color: this.color, action: "copy" as const }] : [];
+    },
+  },
+];
+
+function handleFn(raw: string): FnResponse {
+  const firstWord = raw.split(" ")[0] ?? "";
+  const partial = firstWord.slice(1).toLowerCase();
+
+  // Exact or closest prefix match
+  const exact = fnPlugins.find(p => firstWord === p.prefix);
+  if (exact) {
+    const query = raw.slice(firstWord.length).trim();
+    return { match: { name: exact.name, prefix: exact.prefix, color: exact.color }, results: exact.run(query) };
+  }
+
+  // Partial match — find closest
+  const matches = fnPlugins.filter(p => p.prefix.slice(1).startsWith(partial));
+  if (matches.length === 1 && raw.includes(" ")) {
+    // Unambiguous partial with query — execute it
+    const p = matches[0]!;
+    const query = raw.slice(firstWord.length).trim();
+    return { match: { name: p.name, prefix: p.prefix, color: p.color }, results: p.run(query) };
+  }
+
+  // List matching plugins
+  return {
+    match: null,
+    results: matches.map(p => ({ label: p.prefix, value: p.description, color: p.color, action: "fill" as const })),
+  };
 }
