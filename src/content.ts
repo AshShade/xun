@@ -1,264 +1,222 @@
 // Content script: injects Xun overlay into the page
+// Architecture: State → Computed (render-model) → Renderers
 
-import type { Plugin, SearchResponse, Shortcut } from "./types";
-import type { FnMatch, FnResult, FnResponse } from "./types";
+import type { SearchResponse, Shortcut } from "./types";
+import type { FnResponse } from "./types";
+import type { Mode, State, TextSegment, ResultItemModel, PluginLabelModel, GhostModel, PreviewModel } from "./types";
 const VERSION = "__VERSION__";
 
-// --- Centralized state with granular dispatch ---
-type Mode = "normal" | "plugin" | "address" | "functional";
-interface State {
-  results: SearchResponse["results"];
-  selectedIndex: number;
-  hasPrefix: boolean;
-  activePlugin: Plugin | null;
-  source: string | null;
-  sourceColors: Record<string, string>;
-  mode: Mode;
-  ghost: string;
-  functionalResults: FnResult[];
-  functionalPlugin: FnMatch | null;
-  functionalListing: boolean;
-}
+// render-model.ts functions loaded as globals via manifest scripts array
+declare const computeResultItems: (s: State) => ResultItemModel[];
+declare const computePluginLabel: (s: State) => PluginLabelModel;
+declare const computeGhost: (s: State) => GhostModel;
+declare const computePreview: (s: State) => PreviewModel;
+declare const hexToRgba: (hex: string, alpha: number) => string;
+
+// ═══════════════════════════════════════════════════════════
+// Layer 1: State — raw data, only mutated by user events
+// ═══════════════════════════════════════════════════════════
 
 let state: State = {
-  results: [],
+  query: "",
+  mode: "normal",
   selectedIndex: -1,
-  hasPrefix: false,
+  results: [],
+  functionalResults: [],
   activePlugin: null,
   source: null,
   sourceColors: { tabs: "#89b4fa", bookmarks: "#f9e2af", history: "#a6e3a1" },
-  mode: "normal",
+  hasPrefix: false,
   ghost: "",
-  functionalResults: [],
   functionalPlugin: null,
   functionalListing: false,
 };
 
 type StateKey = keyof State;
-type Listener = () => void;
-const listeners: Partial<Record<StateKey, Listener[]>> = {};
+const stateListeners: Partial<Record<StateKey, (() => void)[]>> = {};
+const pendingKeys = new Set<StateKey>();
+let pendingFlush = false;
 
-function on(keys: StateKey[], fn: Listener): void {
-  for (const k of keys) (listeners[k] ??= []).push(fn);
+function onState(keys: StateKey[], fn: () => void): void {
+  for (const k of keys) (stateListeners[k] ??= []).push(fn);
 }
 
 function setState(patch: Partial<State>): void {
   if (!overlay) return;
-  const changed = new Set<StateKey>();
   for (const k of Object.keys(patch) as StateKey[]) {
-    if (state[k] !== (patch as State)[k]) changed.add(k);
+    if (state[k] !== (patch as State)[k]) pendingKeys.add(k);
   }
   Object.assign(state, patch);
-  const fired = new Set<Listener>();
-  for (const k of changed) {
-    for (const fn of listeners[k] ?? []) {
+  if (!pendingFlush && pendingKeys.size > 0) {
+    pendingFlush = true;
+    queueMicrotask(flush);
+  }
+}
+
+function flush(): void {
+  pendingFlush = false;
+  const keys = new Set(pendingKeys);
+  pendingKeys.clear();
+  const fired = new Set<() => void>();
+  for (const k of keys) {
+    for (const fn of stateListeners[k] ?? []) {
       if (!fired.has(fn)) { fired.add(fn); fn(); }
     }
   }
 }
 
-// --- DOM refs ---
-let host: HTMLDivElement | null = null;
-let shadow: ShadowRoot | null = null;
-let overlay: HTMLDivElement | null = null;
-let currentQuery = "";
-let deepTimer: ReturnType<typeof setTimeout> | null = null;
-let searchEngine = "https://www.google.com/search?q=%s";
+// ═══════════════════════════════════════════════════════════
+// Layer 3: Renderers — pure DOM functions, never read state
+// ═══════════════════════════════════════════════════════════
 
-// --- Mode detection ---
-function detectMode(): Mode {
-  if (state.functionalListing || state.functionalPlugin) return "functional";
-  if (state.activePlugin) return "plugin";
-  const q = currentQuery.trim();
-  if (q.startsWith('"') && q.endsWith('"')) return "normal";
-  if (!q.includes(" ") && (/[./]/.test(q) || q.includes("://"))) return "address";
-  return "normal";
-}
-
-function computeGhost(): string {
-  if (state.mode !== "address" || !state.results.length) return "";
-  const q = currentQuery.toLowerCase();
-  // Find first result URL that starts with what user typed (with or without protocol)
-  for (const r of state.results) {
-    const url = r.url.toLowerCase();
-    if (url.startsWith(q)) return r.url.slice(currentQuery.length);
-    const bare = url.replace(/^https?:\/\//, "");
-    if (bare.startsWith(q)) return bare.slice(currentQuery.length);
-    // Also try without www.
-    const noWww = bare.replace(/^www\./, "");
-    if (noWww.startsWith(q)) return noWww.slice(currentQuery.length);
+function renderSegments(parent: HTMLElement, segments: TextSegment[]): void {
+  for (const seg of segments) {
+    if (seg.highlight) {
+      const mark = document.createElement("mark");
+      mark.textContent = seg.text;
+      parent.appendChild(mark);
+    } else {
+      parent.appendChild(document.createTextNode(seg.text));
+    }
   }
-  return "";
 }
 
-function renderGhost(): void {
-  const ghost = overlay!.querySelector<HTMLSpanElement>("#xun-ghost")!;
-  const mirror = overlay!.querySelector<HTMLSpanElement>("#xun-ghost-mirror")!;
-  ghost.textContent = state.ghost;
-  mirror.textContent = currentQuery;
-}
-
-// --- Renderers (registered as listeners below open()) ---
-
-function escHtml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
-function highlight(text: string, query: string): string {
-  if (!query) return escHtml(text);
-  const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
-  if (!terms.length) return escHtml(text);
-  const lower = text.toLowerCase();
-  const marks = new Uint8Array(text.length);
-  for (const term of terms) {
-    const idx = lower.indexOf(term);
-    if (idx >= 0) for (let i = idx; i < idx + term.length; i++) marks[i] = 1;
-  }
-  let out = "", inMark = false;
-  for (let i = 0; i < text.length; i++) {
-    if (marks[i] && !inMark) { out += "<mark>"; inMark = true; }
-    else if (!marks[i] && inMark) { out += "</mark>"; inMark = false; }
-    out += escHtml(text[i]!);
-  }
-  if (inMark) out += "</mark>";
-  return out;
-}
-
-function renderResults(): void {
-  const container = overlay!.querySelector<HTMLDivElement>("#xun-results")!;
+function renderResultItems(container: HTMLElement, items: ResultItemModel[], onAction: (i: number, newTab: boolean) => void, onHover: (i: number) => void): void {
   container.innerHTML = "";
   container.style.pointerEvents = "none";
-  const q = state.hasPrefix ? currentQuery.trim().split(" ").slice(1).join(" ").trim() : currentQuery.trim();
-  state.results.forEach((item, i) => {
-    const label = item.categoryLabel || TYPE_LABELS[item.type] || item.type;
-    const color = item.categoryColor || state.sourceColors[TYPE_SOURCE_MAP[item.type] ?? ""] || "#a6adc8";
-
+  items.forEach((item, i) => {
     const row = document.createElement("div");
-    row.className = "xun-result" + (i === state.selectedIndex ? " xun-selected" : "");
-    row.dataset["index"] = String(i);
-
-    const typeSpan = document.createElement("span");
-    typeSpan.className = "xun-type";
-    typeSpan.textContent = label;
-    typeSpan.style.background = hexToRgba(color, 0.15);
-    typeSpan.style.color = color;
-
-    const textDiv = document.createElement("div");
-    textDiv.className = "xun-text";
-
-    const titleSpan = document.createElement("span");
-    titleSpan.className = "xun-title";
-    titleSpan.innerHTML = highlight(item.title, q);
-
-    const urlSpan = document.createElement("span");
-    urlSpan.className = "xun-url";
-    urlSpan.innerHTML = highlight(item.url, q);
-
-    textDiv.appendChild(titleSpan);
-    textDiv.appendChild(urlSpan);
-    row.appendChild(typeSpan);
-    row.appendChild(textDiv);
-
-    row.addEventListener("click", (ev) => { navigate(item, isMac ? ev.metaKey : ev.ctrlKey); });
-    row.addEventListener("mouseenter", () => { setState({ selectedIndex: i }); });
-
-    container.appendChild(row);
-  });
-}
-
-function renderSelection(): void {
-  const container = overlay!.querySelector("#xun-results")!;
-  container.querySelectorAll(".xun-selected").forEach((el) => el.classList.remove("xun-selected"));
-  const row = container.children[state.selectedIndex] as HTMLElement | undefined;
-  if (row) { row.classList.add("xun-selected"); row.scrollIntoView({ block: "nearest" }); }
-  // #IF_DEV
-  const item = state.selectedIndex >= 0 ? state.results[state.selectedIndex] : null;
-  if (item) {
-    const v = item.visitCount !== undefined ? item.visitCount : "?";
-    const age = item.lastVisitTime ? ((Date.now() - item.lastVisitTime) / 60000).toFixed(1) + "m ago" : "n/a";
-    const flags = [item.type, item.tabId != null ? "tab" : "", item.visitCount != null ? "hist" : ""].filter(Boolean).join("+");
-    console.log("[xun]", `#${state.selectedIndex}`, `score=${item.score} visits=${v} age=${age}`, flags, item.title, item.url);
-  }
-  // #END_IF_DEV
-}
-
-function renderPreview(): void {
-  const preview = overlay!.querySelector("#xun-preview") as HTMLElement | undefined;
-  if (!preview) return;
-  const item = state.selectedIndex >= 0 ? state.results[state.selectedIndex] : null;
-  preview.textContent = item ? (item.tabId != null ? "(tab) " : "") + item.url : "";
-  preview.style.display = item ? "block" : "none";
-}
-
-function renderPluginLabel(): void {
-  const label = overlay!.querySelector<HTMLSpanElement>("#xun-plugin-label")!;
-  const { activePlugin: plugin, source, functionalPlugin: fp, functionalListing } = state;
-  if (fp) {
-    label.textContent = fp.name;
-    label.style.background = hexToRgba(fp.color, 0.15);
-    label.style.color = fp.color;
-    label.style.display = "inline-block";
-  } else if (functionalListing) {
-    label.textContent = "Functions";
-    label.style.background = hexToRgba("#cba6f7", 0.15);
-    label.style.color = "#cba6f7";
-    label.style.display = "inline-block";
-  } else if (plugin) {
-    const color = plugin.color || "#a6adc8";
-    label.textContent = plugin.name;
-    label.style.background = hexToRgba(color, 0.15);
-    label.style.color = color;
-    label.style.display = "inline-block";
-  } else if (source) {
-    const color = state.sourceColors[source] || "#a6adc8";
-    label.textContent = SOURCE_LABELS[source] || source;
-    label.style.background = hexToRgba(color, 0.15);
-    label.style.color = color;
-    label.style.display = "inline-block";
-  } else {
-    label.style.display = "none";
-    label.textContent = "";
-  }
-}
-
-function renderFunctionalResults(): void {
-  const container = overlay!.querySelector<HTMLDivElement>("#xun-results")!;
-  container.innerHTML = "";
-  container.style.pointerEvents = "none";
-  state.functionalResults.forEach((item, i) => {
-    const row = document.createElement("div");
-    row.className = "xun-result" + (i === state.selectedIndex ? " xun-selected" : "");
+    row.className = "xun-result" + (item.selected ? " xun-selected" : "");
     row.dataset["index"] = String(i);
 
     const typeSpan = document.createElement("span");
     typeSpan.className = "xun-type";
     typeSpan.textContent = item.label;
-    typeSpan.style.background = hexToRgba(item.color, 0.15);
-    typeSpan.style.color = item.color;
+    typeSpan.style.background = item.labelBg;
+    typeSpan.style.color = item.labelColor;
+    if (!item.label) typeSpan.style.display = "none";
 
     const textDiv = document.createElement("div");
     textDiv.className = "xun-text";
+
     const titleSpan = document.createElement("span");
     titleSpan.className = "xun-title";
-    titleSpan.textContent = item.value;
+    renderSegments(titleSpan, item.primary);
+
     textDiv.appendChild(titleSpan);
+    if (item.secondary.length > 0) {
+      const urlSpan = document.createElement("span");
+      urlSpan.className = "xun-url";
+      renderSegments(urlSpan, item.secondary);
+      textDiv.appendChild(urlSpan);
+    }
 
     row.appendChild(typeSpan);
     row.appendChild(textDiv);
-    row.addEventListener("click", () => {
-      if (item.action === "copy") { navigator.clipboard.writeText(item.value); close(); }
-      else {
-        const input = overlay!.querySelector<HTMLInputElement>("#xun-input")!;
-        input.value = item.label + " ";
-        input.dispatchEvent(new Event("input"));
-      }
-    });
-    row.addEventListener("mouseenter", () => { setState({ selectedIndex: i }); });
+    row.addEventListener("click", (ev) => onAction(i, isMac ? ev.metaKey : ev.ctrlKey));
+    row.addEventListener("mouseenter", () => onHover(i));
     container.appendChild(row);
   });
 }
 
-// --- Keyboard shortcut ---
+function renderPluginLabel(container: HTMLElement, model: PluginLabelModel): void {
+  container.textContent = model.text;
+  (container as HTMLElement).style.background = model.bg;
+  (container as HTMLElement).style.color = model.color;
+  (container as HTMLElement).style.display = model.visible ? "inline-block" : "none";
+}
+
+function renderGhostModel(ghostEl: HTMLElement, mirrorEl: HTMLElement, model: GhostModel): void {
+  ghostEl.textContent = model.ghost;
+  mirrorEl.textContent = model.mirror;
+}
+
+function renderPreviewModel(container: HTMLElement, model: PreviewModel): void {
+  container.textContent = model.text;
+  (container as HTMLElement).style.display = model.visible ? "block" : "none";
+}
+
+// ═══════════════════════════════════════════════════════════
+// DOM refs & helpers
+// ═══════════════════════════════════════════════════════════
+
+let host: HTMLDivElement | null = null;
+let shadow: ShadowRoot | null = null;
+let overlay: HTMLDivElement | null = null;
+let deepTimer: ReturnType<typeof setTimeout> | null = null;
+let searchEngine = "https://www.google.com/search?q=%s";
+
+// DOM element refs (set in open(), cleared in close())
+let resultsEl: HTMLDivElement | null = null;
+let previewEl: HTMLElement | null = null;
+let pluginLabelEl: HTMLSpanElement | null = null;
+let ghostEl: HTMLSpanElement | null = null;
+let ghostMirrorEl: HTMLSpanElement | null = null;
+
+function looksLikeUrl(s: string): boolean {
+  if (s.includes(" ")) return false;
+  if (/^https?:\/\//.test(s)) return true;
+  if (/^\d{1,3}(\.\d{1,3}){3}(\/|:|$)/.test(s)) return true;
+  return /^[^\s]+\.[a-z]{2,}(\/|$)/i.test(s);
+}
+
+function detectMode(): Mode {
+  if (state.functionalListing || state.functionalPlugin) return "functional";
+  if (state.activePlugin) return "plugin";
+  const q = state.query.trim();
+  if (q.startsWith('"') && q.endsWith('"')) return "normal";
+  if (!q.includes(" ") && (/[./]/.test(q) || q.includes("://"))) return "address";
+  return "normal";
+}
+
+function computeGhostText(): string {
+  if (state.mode !== "address" || !state.results.length) return "";
+  const q = state.query.toLowerCase();
+  for (const r of state.results) {
+    const url = r.url.toLowerCase();
+    if (url.startsWith(q)) return r.url.slice(state.query.length);
+    const bare = url.replace(/^https?:\/\//, "");
+    if (bare.startsWith(q)) return bare.slice(state.query.length);
+    const noWww = bare.replace(/^www\./, "");
+    if (noWww.startsWith(q)) return noWww.slice(state.query.length);
+  }
+  return "";
+}
+
+// ═══════════════════════════════════════════════════════════
+// Actions — called by renderers via callbacks, mutate state
+// ═══════════════════════════════════════════════════════════
+
+function handleResultAction(index: number, newTab: boolean): void {
+  if (state.mode === "functional") {
+    const fr = state.functionalResults[index];
+    if (!fr) return;
+    if (fr.action === "copy") { navigator.clipboard.writeText(fr.value); close(); }
+    else {
+      const input = overlay!.querySelector<HTMLInputElement>("#xun-input")!;
+      const prefix = state.functionalPlugin?.prefix ?? fr.value.split(" ")[0] ?? "";
+      input.value = prefix + " ";
+      input.dispatchEvent(new Event("input"));
+    }
+    return;
+  }
+  const item = state.results[index];
+  if (item) navigate(item, newTab);
+}
+
+function handleResultHover(index: number): void {
+  setState({ selectedIndex: index });
+}
+
+function navigate(item: SearchResponse["results"][number], newTab = false): void {
+  browser.runtime.sendMessage({ type: "navigate", url: item.url, tabId: item.tabId, windowId: item.windowId, newTab });
+  close();
+}
+
+// ═══════════════════════════════════════════════════════════
+// Keyboard shortcut
+// ═══════════════════════════════════════════════════════════
+
 const isMac = navigator.platform.includes("Mac");
 const DEFAULT_SHORTCUT: Shortcut = isMac
   ? { ctrlKey: false, shiftKey: false, altKey: false, metaKey: true, key: "k" }
@@ -284,7 +242,10 @@ browser.runtime.onMessage.addListener((msg: { type: string }) => {
   if (msg.type === "toggle") toggle();
 });
 
-// --- Open / Close / Toggle ---
+// ═══════════════════════════════════════════════════════════
+// Open / Close / Toggle
+// ═══════════════════════════════════════════════════════════
+
 function toggle(): void { host ? close() : open(); }
 
 function open(): void {
@@ -321,25 +282,42 @@ function open(): void {
   `;
   shadow.appendChild(overlay);
   document.documentElement.appendChild(host);
+
+  // Grab DOM refs
+  resultsEl = overlay.querySelector<HTMLDivElement>("#xun-results")!;
+  previewEl = overlay.querySelector<HTMLElement>("#xun-preview")!;
+  pluginLabelEl = overlay.querySelector<HTMLSpanElement>("#xun-plugin-label")!;
+  ghostEl = overlay.querySelector<HTMLSpanElement>("#xun-ghost")!;
+  ghostMirrorEl = overlay.querySelector<HTMLSpanElement>("#xun-ghost-mirror")!;
+
+  // ── Layer 2 → Layer 3 wiring ──
+  // State changes → compute models → render
+  onState(["results", "functionalResults", "mode", "selectedIndex", "sourceColors", "hasPrefix", "query"], () => {
+    renderResultItems(resultsEl!, computeResultItems(state), handleResultAction, handleResultHover);
+  });
+
+  onState(["activePlugin", "source", "sourceColors", "functionalPlugin", "functionalListing"], () => {
+    renderPluginLabel(pluginLabelEl!, computePluginLabel(state));
+  });
+
+  onState(["ghost", "query"], () => {
+    renderGhostModel(ghostEl!, ghostMirrorEl!, computeGhost(state));
+  });
+
+  onState(["selectedIndex", "results", "mode"], () => {
+    renderPreviewModel(previewEl!, computePreview(state));
+  });
+
   const input = overlay.querySelector<HTMLInputElement>("#xun-input")!;
   input.focus();
   input.addEventListener("input", onInput);
   overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
   overlay.addEventListener("mousemove", () => {
-    const c = overlay?.querySelector<HTMLDivElement>("#xun-results");
-    if (c) c.style.pointerEvents = "auto";
+    if (resultsEl) resultsEl.style.pointerEvents = "auto";
   });
   document.addEventListener("keydown", onKeydown, true);
   document.addEventListener("keyup", stopEvent, true);
   document.addEventListener("keypress", stopEvent, true);
-
-  // Register listeners: each renderer subscribes to its relevant state keys
-  on(["results", "sourceColors"], renderResults);
-  on(["selectedIndex"], renderSelection);
-  on(["selectedIndex", "results"], renderPreview);
-  on(["activePlugin", "source", "sourceColors", "functionalPlugin", "functionalListing"], renderPluginLabel);
-  on(["ghost"], renderGhost);
-  on(["functionalResults"], renderFunctionalResults);
 }
 
 function close(): void {
@@ -348,48 +326,63 @@ function close(): void {
   host = null;
   shadow = null;
   overlay = null;
-  currentQuery = "";
-  state = { results: [], selectedIndex: -1, hasPrefix: false, activePlugin: null, source: null, sourceColors: state.sourceColors, mode: "normal", ghost: "", functionalResults: [], functionalPlugin: null, functionalListing: false };
-  for (const k of Object.keys(listeners) as StateKey[]) delete listeners[k];
+  resultsEl = null;
+  previewEl = null;
+  pluginLabelEl = null;
+  ghostEl = null;
+  ghostMirrorEl = null;
+  state = { query: "", mode: "normal", selectedIndex: -1, results: [], functionalResults: [], activePlugin: null, source: null, sourceColors: state.sourceColors, hasPrefix: false, ghost: "", functionalPlugin: null, functionalListing: false };
+  pendingKeys.clear();
+  pendingFlush = false;
+  for (const k of Object.keys(stateListeners) as StateKey[]) delete stateListeners[k];
   document.removeEventListener("keydown", onKeydown, true);
   document.removeEventListener("keyup", stopEvent, true);
   document.removeEventListener("keypress", stopEvent, true);
 }
 
-// --- Input handler ---
+// ═══════════════════════════════════════════════════════════
+// Input handler
+// ═══════════════════════════════════════════════════════════
+
 function onInput(e: Event): void {
-  currentQuery = (e.target as HTMLInputElement).value;
+  const query = (e.target as HTMLInputElement).value;
   if (deepTimer) clearTimeout(deepTimer);
 
-  const trimmed = currentQuery.trim();
+  const trimmed = query.trim();
 
-  // Functional plugin mode — delegate to background
+  // Functional plugin mode
   if (trimmed.startsWith("/")) {
+    // #IF_DEV
+    console.log("[xun:content] sending fn message:", trimmed);
+    // #END_IF_DEV
     browser.runtime.sendMessage({ type: "fn", query: trimmed }).then((res: unknown) => {
+      // #IF_DEV
+      console.log("[xun:content] fn response:", JSON.stringify(res));
+      // #END_IF_DEV
       const r = res as FnResponse | undefined;
       if (!r) return;
       setState({
-        results: [], hasPrefix: true, activePlugin: null, source: null,
+        query, results: [], hasPrefix: true, activePlugin: null, source: null,
         functionalPlugin: r.match ?? null, functionalListing: !r.match,
         functionalResults: r.results,
         selectedIndex: r.results.length > 0 ? 0 : -1, mode: "functional", ghost: "",
       });
-    }).catch(() => {/* background not ready */});
+    }).catch((err: unknown) => { console.error("[xun:content] fn error:", err); });
     return;
   }
 
-  const hasSpace = currentQuery.includes(" ");
-  // Strip surrounding quotes for forced normal mode search
+  const hasSpace = query.includes(" ");
   const searchQuery = (trimmed.startsWith('"') && trimmed.endsWith('"') && trimmed.length > 1)
     ? trimmed.slice(1, -1) : trimmed;
 
   if (!hasSpace && trimmed.length < 2) {
-    setState({ results: [], hasPrefix: false, selectedIndex: -1, activePlugin: null, source: null, mode: "normal", ghost: "", functionalResults: [], functionalPlugin: null, functionalListing: false });
+    setState({ query, results: [], hasPrefix: false, selectedIndex: -1, activePlugin: null, source: null, mode: "normal", ghost: "", functionalResults: [], functionalPlugin: null, functionalListing: false });
     return;
   }
   browser.runtime.sendMessage({ type: "search", query: searchQuery }).then((raw: unknown) => {
     const res = raw as SearchResponse;
     setState({
+      query,
       results: res.results,
       hasPrefix: res.hasPrefix,
       activePlugin: res.plugin,
@@ -399,12 +392,12 @@ function onInput(e: Event): void {
       functionalResults: [], functionalPlugin: null, functionalListing: false,
     });
     const mode = detectMode();
-    setState({ mode, ghost: mode === "address" ? computeGhost() : "" });
+    setState({ mode, ghost: mode === "address" ? computeGhostText() : "" });
   });
   deepTimer = setTimeout(() => {
     browser.runtime.sendMessage({ type: "deep-search", query: searchQuery }).then((raw: unknown) => {
       const res = raw as SearchResponse;
-      if (currentQuery.trim() !== trimmed) return;
+      if (state.query.trim() !== trimmed) return;
       const prevSelected = state.selectedIndex;
       setState({
         results: res.results,
@@ -416,24 +409,25 @@ function onInput(e: Event): void {
         functionalResults: [], functionalPlugin: null, functionalListing: false,
       });
       const mode = detectMode();
-      setState({ mode, ghost: mode === "address" ? computeGhost() : "" });
+      setState({ mode, ghost: mode === "address" ? computeGhostText() : "" });
     });
   }, 300);
 }
 
-// --- Keyboard handler ---
+// ═══════════════════════════════════════════════════════════
+// Keyboard handler
+// ═══════════════════════════════════════════════════════════
+
 function stopEvent(e: Event): void { e.stopPropagation(); }
 
 function onKeydown(e: KeyboardEvent): void {
   e.stopPropagation();
   if (e.key === "Escape") { close(); e.preventDefault(); return; }
-  // Accept ghost text with Tab or → (only when cursor is at end)
   if (state.ghost && (e.key === "Tab" || e.key === "ArrowRight")) {
     const input = overlay!.querySelector<HTMLInputElement>("#xun-input")!;
     if (input.selectionStart === input.value.length) {
       e.preventDefault();
-      input.value = currentQuery + state.ghost;
-      currentQuery = input.value;
+      input.value = state.query + state.ghost;
       onInput({ target: input } as unknown as Event);
       return;
     }
@@ -447,51 +441,16 @@ function onKeydown(e: KeyboardEvent): void {
     e.preventDefault();
   } else if (e.key === "Enter") {
     e.preventDefault();
-    // Functional mode — copy result or select plugin
-    if (state.mode === "functional" && state.selectedIndex >= 0 && state.functionalResults[state.selectedIndex]) {
-      const fr = state.functionalResults[state.selectedIndex]!;
-      if (fr.action === "copy") { navigator.clipboard.writeText(fr.value); close(); }
-      else {
-        const input = overlay!.querySelector<HTMLInputElement>("#xun-input")!;
-        input.value = fr.label + " ";
-        input.dispatchEvent(new Event("input"));
-      }
-      return;
-    }
     const newTab = isMac ? e.metaKey : e.ctrlKey;
-    if (state.selectedIndex >= 0 && state.results[state.selectedIndex]) {
-      navigate(state.results[state.selectedIndex]!, newTab);
-    } else if (state.activePlugin?.pluginType === "search" && currentQuery) {
-      const q = currentQuery.trim().split(" ").slice(1).join(" ").trim();
+    if (state.selectedIndex >= 0) {
+      handleResultAction(state.selectedIndex, newTab);
+    } else if (state.activePlugin?.pluginType === "search" && state.query) {
+      const q = state.query.trim().split(" ").slice(1).join(" ").trim();
       if (q) navigate({ type: "history", title: "", url: (state.activePlugin as { url: string }).url.replace("%s", encodeURIComponent(q)), score: 0 }, newTab);
-    } else if (currentQuery) {
-      const q = currentQuery.trim();
+    } else if (state.query) {
+      const q = state.query.trim();
       const url = looksLikeUrl(q) ? (q.includes("://") ? q : "https://" + q) : searchEngine.replace("%s", encodeURIComponent(q));
       navigate({ type: "history", title: "", url, score: 0 }, newTab);
     }
   }
-}
-
-function navigate(item: SearchResponse["results"][number], newTab = false): void {
-  browser.runtime.sendMessage({ type: "navigate", url: item.url, tabId: item.tabId, windowId: item.windowId, newTab });
-  close();
-}
-
-// --- Constants & helpers ---
-const TYPE_LABELS: Record<string, string> = { tab: "Tab", bookmark: "Bookmark", history: "History" };
-const TYPE_SOURCE_MAP: Record<string, string> = { tab: "tabs", bookmark: "bookmarks", history: "history" };
-const SOURCE_LABELS: Record<string, string> = { history: "History", tabs: "Tabs", bookmarks: "Bookmarks" };
-
-function looksLikeUrl(s: string): boolean {
-  if (s.includes(" ")) return false;
-  if (/^https?:\/\//.test(s)) return true;
-  if (/^\d{1,3}(\.\d{1,3}){3}(\/|:|$)/.test(s)) return true;
-  return /^[^\s]+\.[a-z]{2,}(\/|$)/i.test(s);
-}
-
-function hexToRgba(hex: string, alpha: number): string {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return `rgba(${r},${g},${b},${alpha})`;
 }

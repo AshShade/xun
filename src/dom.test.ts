@@ -88,6 +88,13 @@ describe("buildResultRow", () => {
     const typeSpan = row.querySelector(".xun-type") as HTMLElement;
     expect(typeSpan.style.color).toBe("#89b4fa");
   });
+
+  it("falls back to type string and default color for unknown type", () => {
+    const row = buildResultRow(makeResult("unknown" as any), 0, false, colors);
+    const typeSpan = row.querySelector(".xun-type") as HTMLElement;
+    expect(typeSpan.textContent).toBe("unknown");
+    expect(typeSpan.style.color).toBe("#a6adc8");
+  });
 });
 
 describe("hexToRgba", () => {

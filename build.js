@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// Build script: injects version from package.json, strips #IF_DEV blocks for release
 const fs = require("fs");
 const path = require("path");
 
@@ -7,25 +6,47 @@ const release = process.argv.includes("--release");
 const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
 const version = release ? pkg.version : `${pkg.version}-b${String(Math.random() * 10000 | 0).padStart(4, "0")}`;
 
-// 1. Update manifest.json version
-const manifest = JSON.parse(fs.readFileSync("manifest.json", "utf8"));
-manifest.version = pkg.version; // manifest doesn't support -dev suffix
-fs.writeFileSync("manifest.json", JSON.stringify(manifest, null, 2) + "\n");
-
-// 2. Post-process compiled JS in dist/
-const dist = "dist";
-for (const f of fs.readdirSync(dist).filter(f => f.endsWith(".js"))) {
-  const fp = path.join(dist, f);
-  let code = fs.readFileSync(fp, "utf8");
-  // Strip `export` keywords (Firefox content scripts don't use modules)
-  code = code.replace(/^export /gm, "");
-  // Inject version
-  code = code.replace(/__VERSION__/g, version);
-  // Strip #IF_DEV blocks in release mode
-  if (release) {
-    code = code.replace(/\/\/ #IF_DEV[\s\S]*?\/\/ #END_IF_DEV\n?/g, "");
+// 1. Copy public/ → dist/ (static assets + manifest)
+function copyDir(src, dst) {
+  fs.mkdirSync(dst, { recursive: true });
+  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+    const s = path.join(src, entry.name), d = path.join(dst, entry.name);
+    entry.isDirectory() ? copyDir(s, d) : fs.copyFileSync(s, d);
   }
+}
+copyDir("public", "dist");
+
+// 2. Update manifest version
+const manifestPath = path.join("dist", "manifest.json");
+const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+manifest.version = pkg.version;
+fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
+
+// 3. Post-process compiled JS in dist/
+for (const f of fs.readdirSync("dist").filter(f => f.endsWith(".js"))) {
+  const fp = path.join("dist", f);
+  let code = fs.readFileSync(fp, "utf8");
+  code = code.replace(/^export /gm, "");
+  code = code.replace(/__VERSION__/g, version);
+  if (release) code = code.replace(/\/\/ #IF_DEV[\s\S]*?\/\/ #END_IF_DEV\n?/g, "");
   fs.writeFileSync(fp, code);
 }
 
-console.log(`Built ${version}${release ? " (release)" : " (dev)"}`);
+// 4. Write .build-info for TUI switcher
+const branch = (() => {
+  try {
+    const head = fs.readFileSync(".git", "utf8").trim();
+    if (head.startsWith("gitdir:")) {
+      const gitdir = head.split(": ", 2)[1];
+      const h = fs.readFileSync(path.join(gitdir, "HEAD"), "utf8").trim();
+      return h.startsWith("ref:") ? h.split("/").pop() : h.slice(0, 8);
+    }
+  } catch {}
+  try {
+    const h = fs.readFileSync(path.join(".git", "HEAD"), "utf8").trim();
+    return h.startsWith("ref:") ? h.split("/").pop() : h.slice(0, 8);
+  } catch { return "unknown"; }
+})();
+fs.writeFileSync(path.join("dist", ".build-info"), `branch=${branch}\nversion=${version}\n`);
+
+console.log(`Built ${version} [${branch}]${release ? " (release)" : ""}`);
