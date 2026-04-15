@@ -25,8 +25,9 @@
   },
   "background": {
     "scripts": [
-      "dist/lib.js",
-      "dist/background.js"
+      "lib.js",
+      "render-model.js",
+      "background.js"
     ]
   },
   "content_scripts": [
@@ -35,7 +36,8 @@
         "<all_urls>"
       ],
       "js": [
-        "dist/content.js"
+        "render-model.js",
+        "content.js"
       ]
     }
   ],

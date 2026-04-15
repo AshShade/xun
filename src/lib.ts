@@ -7,11 +7,7 @@ export function globMatch(str: string, pattern: string): boolean {
     .replace(/\*\*/g, "\0")
     .replace(/\*/g, "[^./]*")
     .replace(/\0/g, ".*");
-  try {
-    return new RegExp("^" + re + "$", "i").test(str);
-  } catch {
-    return false;
-  }
+  return new RegExp("^" + re + "$", "i").test(str);
 }
 
 export function matchesPlugin(url: string, plugin: Plugin | null | undefined): boolean {
@@ -104,6 +100,7 @@ export function validateConfig(raw: unknown): Config {
     if (!p || typeof p !== "object") return false;
     const pl = p as Record<string, unknown>;
     return !!pl["name"] && typeof pl["name"] === "string" && !!pl["prefix"] && typeof pl["prefix"] === "string"
+      && !String(pl["prefix"]).startsWith("/")
       && (pl["pluginType"] === "pattern" || pl["pluginType"] === "search");
   });
 
@@ -187,7 +184,6 @@ export function mergeResults(
     const key = urlKey(item.url);
     const entry = seen.get(key);
     if (entry) {
-      if (item.type === "tab" && !entry.hasTab) { entry.result.score += TAB_BONUS; entry.hasTab = true; }
       if (item.type === "bookmark" && !entry.hasBookmark) { entry.result.score += BOOKMARK_BONUS; entry.hasBookmark = true; }
       if (item.type === "history" && !entry.hasHistory) { entry.result.score += item.score; entry.hasHistory = true; }
       if (item.visitCount != null) { entry.result.visitCount = item.visitCount; entry.result.lastVisitTime = item.lastVisitTime; }
@@ -206,4 +202,46 @@ export function looksLikeUrl(s: string): boolean {
   if (/^https?:\/\//.test(s)) return true;
   if (/^\d{1,3}(\.\d{1,3}){3}(\/|:|$)/.test(s)) return true;
   return /^[^\s]+\.[a-z]{2,}(\/|$)/i.test(s);
+}
+
+export function computeExpression(expr: string): string | null {
+  if (!expr.trim() || !/^[\d\s+\-*/().,%^e]+$/i.test(expr)) return null;
+  const sanitized = expr.replace(/\^/g, "**").replace(/%/g, "/100");
+  let pos = 0;
+  const ch = () => sanitized[pos];
+  const skip = () => { while (ch() === " ") pos++; };
+
+  function num(): number {
+    skip();
+    if (ch() === "(") { pos++; const v = add(); skip(); pos++; return v; }
+    if (ch() === "-") { pos++; return -num(); }
+    let s = "";
+    while (pos < sanitized.length && /[\d.e]/i.test(sanitized[pos]!)) s += sanitized[pos++];
+    return parseFloat(s);
+  }
+
+  function pow(): number {
+    let v = num();
+    skip();
+    while (pos < sanitized.length - 1 && sanitized[pos] === "*" && sanitized[pos + 1] === "*") { pos += 2; v = v ** num(); skip(); }
+    return v;
+  }
+
+  function mul(): number {
+    let v = pow();
+    skip();
+    while (ch() === "*" || ch() === "/") { const op = ch()!; pos++; v = op === "*" ? v * pow() : v / pow(); skip(); }
+    return v;
+  }
+
+  function add(): number {
+    let v = mul();
+    skip();
+    while (ch() === "+" || ch() === "-") { const op = ch()!; pos++; v = op === "+" ? v + mul() : v - mul(); skip(); }
+    return v;
+  }
+
+  const result = add();
+  if (!isFinite(result)) return null;
+  return Number.isInteger(result) ? String(result) : result.toFixed(10).replace(/\.?0+$/, "");
 }

@@ -11,7 +11,9 @@ declare const queryHistory: typeof import("./lib").queryHistory;
 declare const queryBookmarks: typeof import("./lib").queryBookmarks;
 declare const queryTabs: typeof import("./lib").queryTabs;
 
-import type { BookmarkEntry, Config, HistoryEntry, SearchResponse, TabEntry } from "./types";
+declare const computeExpression: typeof import("./lib").computeExpression;
+
+import type { BookmarkEntry, Config, FnResponse, HistoryEntry, SearchResponse, TabEntry } from "./types";
 
 let config: Config = { ...DEFAULT_CONFIG };
 browser.storage.local.get("config").then(({ config: c }: { config?: unknown }) => {
@@ -45,16 +47,22 @@ interface SearchMessage { type: "search"; query: string }
 interface DeepSearchMessage { type: "deep-search"; query: string }
 interface RefreshMessage { type: "refresh-cache" }
 interface GetConfigMessage { type: "get-config" }
-type Message = NavigateMessage | SearchMessage | DeepSearchMessage | RefreshMessage | GetConfigMessage;
+interface FnMessage { type: "fn"; query: string }
+type Message = NavigateMessage | SearchMessage | DeepSearchMessage | RefreshMessage | GetConfigMessage | FnMessage;
 
-browser.runtime.onMessage.addListener((msg: Message, sender: browser.runtime.MessageSender, sendResponse: (response: SearchResponse | Config) => void) => {
+browser.runtime.onMessage.addListener((msg: Message, sender: browser.runtime.MessageSender, sendResponse: (response: unknown) => void): true | void => {
+  if (msg.type === "fn") {
+    const r = handleFn(msg.query);
+    // #IF_DEV
+    console.log("[xun:bg] fn result:", JSON.stringify(r));
+    // #END_IF_DEV
+    sendResponse(r); return true;
+  }
+  if (msg.type === "search") { sendResponse(handleSearch(msg.query)); return true; }
+  if (msg.type === "get-config") { sendResponse(config); return true; }
   if (msg.type === "refresh-cache") {
     refreshCaches().then(() => sendResponse({ results: [], hasPrefix: false, sourceColors: config.sourceColors, plugin: null, source: null }));
     return true;
-  }
-  if (msg.type === "search") {
-    sendResponse(handleSearch(msg.query));
-    return false;
   }
   if (msg.type === "deep-search") {
     deepSearch(msg.query).then(sendResponse);
@@ -70,11 +78,6 @@ browser.runtime.onMessage.addListener((msg: Message, sender: browser.runtime.Mes
       browser.tabs.update(sender.tab.id, { url: msg.url });
     }
   }
-  if (msg.type === "get-config") {
-    sendResponse(config);
-    return false;
-  }
-  return undefined;
 });
 
 function handleSearch(raw: string): SearchResponse {
@@ -106,4 +109,57 @@ async function deepSearch(raw: string): Promise<SearchResponse> {
   mergeHistoryCache(historyCache, apiResults);
 
   return handleSearch(raw);
+}
+
+// --- Functional plugins ---
+interface FnPlugin {
+  name: string;
+  prefix: string;
+  description: string;
+  run(query: string): FnResponse["results"];
+}
+
+const fnPlugins: FnPlugin[] = [
+  {
+    name: "Compute", prefix: "/compute", description: "Evaluate math expressions",
+    run(q) {
+      if (!q) return [{ value: this.prefix + " — " + this.description, action: "fill" as const }];
+      const r = computeExpression(q);
+      return r ? [{ value: r, action: "copy" as const }] : [];
+    },
+  },
+];
+
+function handleFn(raw: string): FnResponse {
+  const firstWord = raw.split(" ")[0] ?? "";
+  const hasSpace = raw.includes(" ");
+  const partial = firstWord.slice(1).toLowerCase();
+
+  // Once space is typed, lock to best matching plugin and evaluate
+  if (hasSpace) {
+    const exact = fnPlugins.find(p => firstWord === p.prefix);
+    if (exact) {
+      const query = raw.slice(firstWord.length).trim();
+      return { match: { name: exact.name, prefix: exact.prefix }, results: exact.run(query) };
+    }
+    const matches = fnPlugins.filter(p => p.prefix.slice(1).startsWith(partial));
+    if (matches.length >= 1) {
+      const p = matches[0]!;
+      const query = raw.slice(firstWord.length).trim();
+      return { match: { name: p.name, prefix: p.prefix }, results: p.run(query) };
+    }
+    return { match: null, results: [] };
+  }
+
+  // No space yet — list plugins sorted by match quality
+  const scored = fnPlugins.map(p => {
+    const name = p.prefix.slice(1);
+    const score = name === partial ? 100 : name.startsWith(partial) ? 50 + partial.length : 0;
+    return { p, score };
+  }).filter(x => x.score > 0 || !partial).sort((a, b) => b.score - a.score);
+
+  return {
+    match: null,
+    results: scored.map(({ p }) => ({ value: p.prefix + " — " + p.description, action: "fill" as const })),
+  };
 }

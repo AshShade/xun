@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { globMatch, matchesPlugin, parseQuery, decayScore, TAB_BONUS, BOOKMARK_BONUS, fuzzyMatch, mergeResults, urlKey, validateConfig, mergeHistoryCache, queryHistory, queryBookmarks, queryTabs, looksLikeUrl } from "./lib";
+import { globMatch, matchesPlugin, parseQuery, decayScore, TAB_BONUS, BOOKMARK_BONUS, fuzzyMatch, mergeResults, urlKey, validateConfig, mergeHistoryCache, queryHistory, queryBookmarks, queryTabs, looksLikeUrl, computeExpression } from "./lib";
 import { truncateUrl, buildResultRow } from "./dom";
 import type { Config, HistoryEntry, PatternPlugin, SearchPlugin, SearchResult } from "./types";
 
@@ -26,6 +26,9 @@ describe("matchesPlugin", () => {
   it("returns true when no plugin", () => {
     expect(matchesPlugin("https://anything.com", null)).toBe(true);
   });
+  it("returns false for invalid URL", () => {
+    expect(matchesPlugin("not a valid url", { name: "P", prefix: "p", pluginType: "pattern", patterns: ["x.com"], color: "#f00" })).toBe(false);
+  });
 });
 
 describe("parseQuery", () => {
@@ -47,6 +50,10 @@ describe("parseQuery", () => {
   it("returns raw query when no prefix", () => {
     expect(parseQuery("react hooks", config)).toEqual({ query: "react hooks", source: null, plugin: null });
   });
+  it("handles config with no plugins array", () => {
+    const noPlugins = { prefixes: { history: "h", tabs: "t", bookmarks: "b" }, sourceColors: {}, searchEngine: "" } as Config;
+    expect(parseQuery("p deploy", noPlugins)).toEqual({ query: "p deploy", source: null, plugin: null });
+  });
 });
 
 const hours = (h: number) => Date.now() - h * 60 * 60 * 1000;
@@ -55,6 +62,7 @@ const days = (d: number) => hours(d * 24);
 describe("decayScore", () => {
   it("returns 0 for no visits", () => { expect(decayScore(0, Date.now())).toBe(0); });
   it("returns 0 for null lastVisitTime", () => { expect(decayScore(10, null)).toBe(0); });
+  it("returns 0 for undefined visitCount", () => { expect(decayScore(undefined, Date.now())).toBe(0); });
 
   it("just visited page scores high", () => {
     expect(decayScore(5, Date.now())).toBeGreaterThan(300);
@@ -219,6 +227,43 @@ describe("mergeResults", () => {
     expect(results).toHaveLength(20);
     expect(results[0]!.score).toBe(24);
   });
+
+  it("filters out non-matching items in pattern plugin with query", () => {
+    const plugin: PatternPlugin = { name: "P", prefix: "p", pluginType: "pattern", patterns: ["github.com/**"], color: "#f00" };
+    const results = mergeResults([], [], [
+      makeResult("history", "https://github.com/match", 50),
+      { ...makeResult("history", "https://github.com/other", 40), title: "Unrelated" },
+    ], plugin, "match");
+    expect(results).toHaveLength(1);
+    expect(results[0]!.url).toBe("https://github.com/match");
+  });
+
+  it("adds bookmark bonus on duplicate", () => {
+    const results = mergeResults(
+      [], [makeResult("bookmark", "https://a.com", BOOKMARK_BONUS)],
+      [makeResult("history", "https://a.com", 80)], null, "a",
+    );
+    expect(results).toHaveLength(1);
+    expect(results[0]!.score).toBe(80 + BOOKMARK_BONUS);
+  });
+
+  it("carries visitCount from duplicate history entry", () => {
+    const h1 = { ...makeResult("history", "https://a.com?v=1", 50), visitCount: 10, lastVisitTime: 1000 };
+    const h2 = { ...makeResult("history", "https://a.com?v=2", 30), visitCount: 20, lastVisitTime: 2000 };
+    const results = mergeResults([], [], [h1, h2], null, "a");
+    expect(results).toHaveLength(1);
+    expect(results[0]!.visitCount).toBe(20);
+    expect(results[0]!.lastVisitTime).toBe(2000);
+  });
+
+  it("does not double-count bookmark bonus from duplicate bookmarks", () => {
+    const results = mergeResults(
+      [], [makeResult("bookmark", "https://a.com?x=1", BOOKMARK_BONUS), makeResult("bookmark", "https://a.com?x=2", BOOKMARK_BONUS)],
+      [], null, "a",
+    );
+    expect(results).toHaveLength(1);
+    expect(results[0]!.score).toBe(BOOKMARK_BONUS);
+  });
 });
 
 describe("urlKey", () => {
@@ -263,6 +308,23 @@ describe("validateConfig", () => {
     });
     expect(c.plugins[0]!.name).toBe("A");
   });
+  it("uses default sourceColors when value is not an object", () => {
+    const c = validateConfig({ sourceColors: "invalid" });
+    expect(c.sourceColors).toEqual({ tabs: "#89b4fa", bookmarks: "#f9e2af", history: "#a6e3a1" });
+  });
+  it("merges custom sourceColors with defaults", () => {
+    const c = validateConfig({ sourceColors: { tabs: "#ff0000" } });
+    expect(c.sourceColors.tabs).toBe("#ff0000");
+    expect(c.sourceColors.bookmarks).toBe("#f9e2af");
+  });
+  it("uses default searchEngine when value is empty or non-string", () => {
+    expect(validateConfig({ searchEngine: "" }).searchEngine).toContain("google");
+    expect(validateConfig({ searchEngine: 42 }).searchEngine).toContain("google");
+  });
+  it("uses custom searchEngine when provided", () => {
+    const c = validateConfig({ searchEngine: "https://ddg.gg/?q=%s" });
+    expect(c.searchEngine).toBe("https://ddg.gg/?q=%s");
+  });
 });
 
 // ── Cache layer tests ──
@@ -298,6 +360,17 @@ describe("mergeHistoryCache", () => {
     const cache = new Map<string, HistoryEntry>();
     mergeHistoryCache(cache, [{ url: "", title: "X" }, { url: "https://a.com", title: "" }]);
     expect(cache.size).toBe(0);
+  });
+  it("defaults visitCount and lastVisitTime to 0 when missing", () => {
+    const cache = new Map<string, HistoryEntry>();
+    mergeHistoryCache(cache, [{ url: "https://a.com", title: "A" }]);
+    expect(cache.get("https://a.com")).toEqual({ url: "https://a.com", title: "A", visitCount: 0, lastVisitTime: 0 });
+  });
+  it("updates entry when new item has no lastVisitTime and prev exists", () => {
+    const cache = new Map<string, HistoryEntry>();
+    mergeHistoryCache(cache, [{ url: "https://a.com", title: "Old", visitCount: 5, lastVisitTime: 0 }]);
+    mergeHistoryCache(cache, [{ url: "https://a.com", title: "New", visitCount: 8 }]);
+    expect(cache.get("https://a.com")!.title).toBe("New");
   });
 });
 
@@ -418,5 +491,53 @@ describe("truncateUrl", () => {
   });
   it("returns raw string for invalid URLs", () => {
     expect(truncateUrl("not-a-url")).toBe("not-a-url");
+  });
+});
+
+describe("computeExpression", () => {
+  it("evaluates basic arithmetic", () => {
+    expect(computeExpression("2 + 3")).toBe("5");
+    expect(computeExpression("10 * 5")).toBe("50");
+    expect(computeExpression("100 / 4")).toBe("25");
+  });
+  it("handles exponents via ^", () => {
+    expect(computeExpression("2^10")).toBe("1024");
+  });
+  it("handles percentages", () => {
+    expect(computeExpression("15% * 200")).toBe("30");
+  });
+  it("returns null for invalid input", () => {
+    expect(computeExpression("")).toBeNull();
+    expect(computeExpression("hello")).toBeNull();
+    expect(computeExpression("alert(1)")).toBeNull();
+  });
+  it("returns null for non-finite results", () => {
+    expect(computeExpression("1/0")).toBeNull();
+  });
+  it("returns decimal result trimmed", () => {
+    expect(computeExpression("1 / 3")).toBe("0.3333333333");
+  });
+  it("returns null for expressions that throw", () => {
+    expect(computeExpression(")(")).toBeNull();
+  });
+  it("handles subtraction", () => {
+    expect(computeExpression("10 - 3")).toBe("7");
+    expect(computeExpression("10 - 3 - 2")).toBe("5");
+  });
+  it("handles chained division", () => {
+    expect(computeExpression("100 / 2 / 5")).toBe("10");
+  });
+});
+
+describe("validateConfig rejects / prefixes", () => {
+  it("filters out plugins with / prefix", () => {
+    const config = validateConfig({
+      plugins: [
+        { name: "Good", prefix: "g", pluginType: "search", url: "http://x.com?q=%s", color: "#fff" },
+        { name: "Bad", prefix: "/bad", pluginType: "search", url: "http://x.com?q=%s", color: "#fff" },
+      ],
+    });
+    expect(config.plugins).toHaveLength(1);
+    expect(config.plugins[0]!.name).toBe("Good");
   });
 });

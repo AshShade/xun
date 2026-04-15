@@ -78,3 +78,48 @@ export interface SearchResponse {
   plugin: Plugin | null;
   source: string | null;
 }
+
+// Functional plugin protocol (content ↔ background)
+export interface FnMatch { name: string; prefix: string; }
+export interface FnResult { value: string; action: "copy" | "fill"; }
+export interface FnResponse { match: FnMatch | null; results: FnResult[]; }
+
+// --- Render data model (Layer 2: computed from state, consumed by renderers) ---
+
+export type Mode = "normal" | "plugin" | "address" | "functional";
+
+export interface State {
+  query: string;
+  mode: Mode;
+  selectedIndex: number;
+  results: SearchResult[];
+  functionalResults: FnResult[];
+  activePlugin: Plugin | null;
+  source: string | null;
+  sourceColors: Record<string, string>;
+  hasPrefix: boolean;
+  ghost: string;
+  functionalPlugin: FnMatch | null;
+  functionalListing: boolean;
+}
+
+export interface TextSegment { text: string; highlight: boolean; }
+
+export interface ResultItemModel {
+  label: string;
+  labelBg: string;
+  labelColor: string;
+  primary: TextSegment[];
+  secondary: TextSegment[];
+  selected: boolean;
+}
+
+export interface PluginLabelModel {
+  text: string;
+  bg: string;
+  color: string;
+  visible: boolean;
+}
+
+export interface GhostModel { ghost: string; mirror: string; }
+export interface PreviewModel { text: string; visible: boolean; }

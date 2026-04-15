@@ -4,8 +4,8 @@ export default defineConfig({
   test: {
     include: ["src/**/*.test.ts"],
     coverage: {
-      include: ["src/lib.ts"],
-      thresholds: { statements: 95, branches: 85, functions: 100, lines: 95 },
+      include: ["src/lib.ts", "src/render-model.ts", "src/dom.ts"],
+      thresholds: { statements: 100, branches: 98, functions: 100, lines: 100 },
     },
   },
 });
