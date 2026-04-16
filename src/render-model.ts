@@ -1,7 +1,7 @@
 // Layer 2: Pure compute functions — State → Render Data Models
 // No DOM, no side effects, fully testable.
 
-import type { State, TextSegment, ResultItemModel, PluginLabelModel, GhostModel, PreviewModel } from "./types";
+import type { State, TextSegment, ResultItemModel, PluginLabelModel, GhostModel, PreviewModel, UIModel } from "./types";
 
 // --- Shared pure helpers ---
 
@@ -45,14 +45,18 @@ export function computeResultItems(s: State): ResultItemModel[] {
   const q = s.hasPrefix ? s.query.trim().split(" ").slice(1).join(" ").trim() : s.query.trim();
 
   if (s.mode === "functional") {
-    return s.functionalResults.map((item, i) => ({
-      label: "",
-      labelBg: "",
-      labelColor: "",
-      primary: [{ text: item.value, highlight: false }],
-      secondary: [],
-      selected: i === s.selectedIndex,
-    }));
+    const fnQ = s.query.trim().split(" ").slice(1).join(" ").trim();
+    return s.functionalResults.map((item, i) => {
+      const color = item.labelColor || "";
+      return {
+        label: item.label || "",
+        labelBg: color ? hexToRgba(color, 0.15) : "",
+        labelColor: color,
+        primary: fnQ && item.label ? segmentHighlight(item.value, fnQ) : [{ text: item.value, highlight: false }],
+        secondary: item.secondary ? (fnQ ? segmentHighlight(item.secondary, fnQ) : [{ text: item.secondary, highlight: false }]) : [],
+        selected: i === s.selectedIndex,
+      };
+    });
   }
 
   return s.results.map((item, i) => {
@@ -88,5 +92,14 @@ export function computePreview(s: State): PreviewModel {
   return {
     text: (item.tabId != null ? "(tab) " : "") + item.url,
     visible: true,
+  };
+}
+
+export function computeUI(s: State): UIModel {
+  return {
+    results: computeResultItems(s),
+    pluginLabel: computePluginLabel(s),
+    ghost: computeGhost(s),
+    preview: computePreview(s),
   };
 }
