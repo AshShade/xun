@@ -31,9 +31,9 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build:release
-      - run: npx web-ext build --source-dir . --artifacts-dir artifacts --overwrite-dest
+      - run: npx web-ext build --source-dir dist --artifacts-dir artifacts --overwrite-dest
       - name: Sign and publish
-        run: npx web-ext sign --source-dir . --artifacts-dir artifacts --channel listed --amo-metadata amo-metadata.json --timeout 900000 || echo "Timed out waiting for approval — submission was successful, check AMO dashboard"
+        run: npx web-ext sign --source-dir dist --artifacts-dir artifacts --channel listed --amo-metadata amo-metadata.json --timeout 900000 || echo "Timed out waiting for approval — submission was successful, check AMO dashboard"
         env:
           WEB_EXT_API_KEY: ${{ secrets.WEB_EXT_API_KEY }}
           WEB_EXT_API_SECRET: ${{ secrets.WEB_EXT_API_SECRET }}

@@ -11,7 +11,7 @@ Spotlight-style search for Firefox — search open tabs, bookmarks, and history 
 **From source** (development):
 1. Clone the repo and run `npm install && npm run build`
 2. Open Firefox → `about:debugging` → This Firefox → Load Temporary Add-on
-3. Select `manifest.json` from the project root
+3. Select `dist/manifest.json` from the project
 
 ## Usage
 
@@ -67,6 +67,20 @@ Redirects to a URL with `%s` replaced by your query. Example: `cs test` opens Co
   "color": "#fab387"
 }
 ```
+
+### Functional Plugins
+
+Built-in commands that start with `/`. These provide interactive results with labels, descriptions, and fill-on-enter behavior.
+
+| Command | Description |
+|---------|-------------|
+| `/plugins` | Browse all registered plugins — shows name, prefix, and URL patterns |
+| `/plugins <query>` | Fuzzy search plugins by name or prefix |
+| `/compute <expr>` | Evaluate math expressions (e.g. `/compute 2+3*4`) |
+
+Type `/plugins ` (with trailing space) to list all plugins. Select one and press Enter to fill its prefix into the search bar.
+
+Custom functional plugins can be added by extending `background.ts`.
 
 ### Pattern Syntax
 
@@ -126,6 +140,7 @@ Matched terms are highlighted in both the title and URL of each result. Highligh
 |------|---------|----------|
 | **Normal** | Default | Word-level fuzzy search across tabs, bookmarks, history |
 | **Plugin** | First word matches a plugin prefix | Filters results by plugin patterns |
+| **Functional** | Query starts with `/` | Runs a built-in command (`/plugins`, `/compute`) |
 | **Address** | No spaces + contains `.`, `/`, or `://` | Ghost text auto-completion from top matching URL. Press Tab or → to accept |
 
 Wrap query in `"quotes"` to force normal mode (e.g. `"github.com"` searches instead of navigating).
@@ -151,10 +166,11 @@ Click the toolbar icon to configure:
 
 | File | Role |
 |------|------|
-| `content.ts` | UI controller — Shadow DOM isolation, centralized state with pub/sub dispatch, DOM rendering, event handlers |
-| `background.ts` | Search engine — in-memory caches (history, bookmarks, tabs), query processing |
+| `content.ts` | UI controller — Shadow DOM, single-renderer architecture, event handlers |
+| `render-model.ts` | Pure compute layer — `computeUI(state)` produces the full UI model from state |
+| `background.ts` | Search engine — in-memory caches (history, bookmarks, tabs), query processing, functional plugins |
 | `lib.ts` | Pure functions — scoring (frecency + fuzzy match), cache builders, config validation with migration |
-| `dom.ts` | DOM helpers — `buildResultRow`, `highlightIndex`, `hexToRgba`, `truncateUrl` |
+| `dom.ts` | DOM helpers — `highlightIndex`, `hexToRgba`, `truncateUrl` |
 | `types.ts` | Shared TypeScript type definitions |
 | `options.ts` | Settings page — shortcut config, prefix/plugin management, search engine |
 | `editor.ts` | Full-tab JSON config editor with docs panel |
@@ -163,7 +179,19 @@ Click the toolbar icon to configure:
 
 ### State management
 
-`content.ts` uses a lightweight pub/sub pattern. A single `State` object holds all UI state (`results`, `selectedIndex`, `hasPrefix`, `activePlugin`, `source`, `sourceColors`, `mode`, `ghost`). Renderers subscribe to specific state keys via `on(keys, fn)`. When `setState(patch)` is called, only renderers subscribed to the changed keys fire — no full re-renders.
+`content.ts` uses a single-renderer architecture inspired by React's unidirectional data flow:
+
+```
+setState(patch) → queueMicrotask → computeUI(state) → render(UIModel)
+```
+
+1. **State** — a single `State` object holds all UI state. `setState(patch)` merges changes and schedules a render via `queueMicrotask` (batches multiple calls in the same tick).
+2. **Compute** — `computeUI(state)` is a pure function that produces a `UIModel` describing the entire UI: results, plugin label, ghost text, and preview.
+3. **Render** — a single `render()` function owns all DOM elements (captured in a closure — inaccessible from outside). It diffs the new model against the previous one at the component level:
+   - **Results**: full DOM rebuild only when content changes; selection-only changes just toggle a CSS class + `scrollIntoView`
+   - **Plugin label, ghost, preview**: reference equality check, skip if unchanged
+
+This makes it structurally impossible for two render paths to touch the same DOM element.
 
 ## Development
 

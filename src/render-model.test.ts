@@ -1,5 +1,5 @@
 import { describe, test, expect } from "vitest";
-import { segmentHighlight, hexToRgba, computeResultItems, computePluginLabel, computeGhost, computePreview } from "./render-model";
+import { segmentHighlight, hexToRgba, computeResultItems, computePluginLabel, computeGhost, computePreview, computeUI } from "./render-model";
 import type { State } from "./types";
 
 // --- Factory for default state ---
@@ -211,7 +211,7 @@ describe("computeResultItems", () => {
       query: "/plugins ",
       hasPrefix: true,
       functionalResults: [
-        { value: "cp", action: "fill", label: "CodePackage", labelColor: "#89b4fa", secondary: "code.amazon.com/packages/**" },
+        { value: "cp", action: "fill", label: "CodePackage", labelColor: "#89b4fa", secondary: "git.example.com/packages/**" },
       ],
       selectedIndex: 0,
     });
@@ -219,7 +219,7 @@ describe("computeResultItems", () => {
     expect(items[0]!.label).toBe("CodePackage");
     expect(items[0]!.labelColor).toBe("#89b4fa");
     expect(items[0]!.primary).toEqual([{ text: "cp", highlight: false }]);
-    expect(items[0]!.secondary).toEqual([{ text: "code.amazon.com/packages/**", highlight: false }]);
+    expect(items[0]!.secondary).toEqual([{ text: "git.example.com/packages/**", highlight: false }]);
   });
 
   test("functional mode highlights primary and secondary with query", () => {
@@ -228,15 +228,16 @@ describe("computeResultItems", () => {
       query: "/plugins task",
       hasPrefix: true,
       functionalResults: [
-        { value: "tt", action: "fill", label: "TaskeiTask", labelColor: "#cba6f7", secondary: "taskei.amazon.dev/tasks/**" },
+        { value: "tt", action: "fill", label: "TaskTracker", labelColor: "#cba6f7", secondary: "tasks.example.dev/tasks/**" },
       ],
       selectedIndex: 0,
     });
     const items = computeResultItems(s);
+    expect(items[0]!.label).toBe("TaskTracker");
     expect(items[0]!.primary).toEqual([{ text: "tt", highlight: false }]);
     expect(items[0]!.secondary).toEqual([
       { text: "task", highlight: true },
-      { text: "ei.amazon.dev/tasks/**", highlight: false },
+      { text: "s.example.dev/tasks/**", highlight: false },
     ]);
   });
 });
@@ -355,5 +356,15 @@ describe("computePreview", () => {
       results: [{ type: "history", title: "X", url: "https://x.com", score: 1 }],
     }));
     expect(model.visible).toBe(false);
+  });
+});
+
+describe("computeUI", () => {
+  test("returns all sub-models", () => {
+    const ui = computeUI(makeState());
+    expect(ui.results).toEqual([]);
+    expect(ui.pluginLabel.visible).toBe(false);
+    expect(ui.ghost).toEqual({ ghost: "", mirror: "" });
+    expect(ui.preview.visible).toBe(false);
   });
 });

@@ -527,6 +527,9 @@ describe("computeExpression", () => {
   it("handles chained division", () => {
     expect(computeExpression("100 / 2 / 5")).toBe("10");
   });
+  it("handles unary negation", () => {
+    expect(computeExpression("-5 + 3")).toBe("-2");
+  });
 });
 
 describe("validateConfig rejects / prefixes", () => {
