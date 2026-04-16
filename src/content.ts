@@ -3,14 +3,11 @@
 
 import type { SearchResponse, Shortcut } from "./types";
 import type { FnResponse } from "./types";
-import type { Mode, State, TextSegment, ResultItemModel, PluginLabelModel, GhostModel, PreviewModel } from "./types";
+import type { Mode, State, TextSegment, ResultItemModel, PluginLabelModel, GhostModel, PreviewModel, UIModel } from "./types";
 const VERSION = "__VERSION__";
 
 // render-model.ts functions loaded as globals via manifest scripts array
-declare const computeResultItems: (s: State) => ResultItemModel[];
-declare const computePluginLabel: (s: State) => PluginLabelModel;
-declare const computeGhost: (s: State) => GhostModel;
-declare const computePreview: (s: State) => PreviewModel;
+declare const computeUI: (s: State) => UIModel;
 declare const hexToRgba: (hex: string, alpha: number) => string;
 
 // ═══════════════════════════════════════════════════════════
@@ -32,41 +29,20 @@ let state: State = {
   functionalListing: false,
 };
 
-type StateKey = keyof State;
-const stateListeners: Partial<Record<StateKey, (() => void)[]>> = {};
-const pendingKeys = new Set<StateKey>();
-let pendingFlush = false;
-
-function onState(keys: StateKey[], fn: () => void): void {
-  for (const k of keys) (stateListeners[k] ??= []).push(fn);
-}
+let render: ((model: UIModel) => void) | null = null;
+let renderPending = false;
 
 function setState(patch: Partial<State>): void {
-  if (!overlay) return;
-  for (const k of Object.keys(patch) as StateKey[]) {
-    if (state[k] !== (patch as State)[k]) pendingKeys.add(k);
-  }
+  if (!render) return;
   Object.assign(state, patch);
-  if (!pendingFlush && pendingKeys.size > 0) {
-    pendingFlush = true;
-    queueMicrotask(flush);
-  }
-}
-
-function flush(): void {
-  pendingFlush = false;
-  const keys = new Set(pendingKeys);
-  pendingKeys.clear();
-  const fired = new Set<() => void>();
-  for (const k of keys) {
-    for (const fn of stateListeners[k] ?? []) {
-      if (!fired.has(fn)) { fired.add(fn); fn(); }
-    }
+  if (!renderPending) {
+    renderPending = true;
+    queueMicrotask(() => { renderPending = false; render!(computeUI(state)); });
   }
 }
 
 // ═══════════════════════════════════════════════════════════
-// Layer 3: Renderers — pure DOM functions, never read state
+// Layer 3: Renderer — single render function owns all DOM
 // ═══════════════════════════════════════════════════════════
 
 function renderSegments(parent: HTMLElement, segments: TextSegment[]): void {
@@ -81,59 +57,105 @@ function renderSegments(parent: HTMLElement, segments: TextSegment[]): void {
   }
 }
 
-function renderResultItems(container: HTMLElement, items: ResultItemModel[], onAction: (i: number, newTab: boolean) => void, onHover: (i: number) => void): void {
-  container.innerHTML = "";
-  container.style.pointerEvents = "none";
-  items.forEach((item, i) => {
-    const row = document.createElement("div");
-    row.className = "xun-result" + (item.selected ? " xun-selected" : "");
-    row.dataset["index"] = String(i);
+function createRenderer(
+  root: HTMLElement,
+  onResultAction: (i: number, newTab: boolean) => void,
+  onResultHover: (i: number) => void,
+): (model: UIModel) => void {
+  const resultsEl = root.querySelector<HTMLDivElement>("#xun-results")!;
+  const previewEl = root.querySelector<HTMLElement>("#xun-preview")!;
+  const pluginLabelEl = root.querySelector<HTMLSpanElement>("#xun-plugin-label")!;
+  const ghostEl = root.querySelector<HTMLSpanElement>("#xun-ghost")!;
+  const ghostMirrorEl = root.querySelector<HTMLSpanElement>("#xun-ghost-mirror")!;
 
-    const typeSpan = document.createElement("span");
-    typeSpan.className = "xun-type";
-    typeSpan.textContent = item.label;
-    typeSpan.style.background = item.labelBg;
-    typeSpan.style.color = item.labelColor;
-    if (!item.label) typeSpan.style.display = "none";
+  let prev: UIModel | null = null;
 
-    const textDiv = document.createElement("div");
-    textDiv.className = "xun-text";
+  return (model: UIModel) => {
+    // ── Results ──
+    if (!prev || !resultsContentEqual(prev.results, model.results)) {
+      // Full rebuild
+      resultsEl.innerHTML = "";
+      resultsEl.style.pointerEvents = "none";
+      model.results.forEach((item, i) => {
+        const row = document.createElement("div");
+        row.className = "xun-result" + (item.selected ? " xun-selected" : "");
+        row.dataset["index"] = String(i);
 
-    const titleSpan = document.createElement("span");
-    titleSpan.className = "xun-title";
-    renderSegments(titleSpan, item.primary);
+        const typeSpan = document.createElement("span");
+        typeSpan.className = "xun-type";
+        typeSpan.textContent = item.label;
+        typeSpan.style.background = item.labelBg;
+        typeSpan.style.color = item.labelColor;
+        if (!item.label) typeSpan.style.display = "none";
 
-    textDiv.appendChild(titleSpan);
-    if (item.secondary.length > 0) {
-      const urlSpan = document.createElement("span");
-      urlSpan.className = "xun-url";
-      renderSegments(urlSpan, item.secondary);
-      textDiv.appendChild(urlSpan);
+        const textDiv = document.createElement("div");
+        textDiv.className = "xun-text";
+
+        const titleSpan = document.createElement("span");
+        titleSpan.className = "xun-title";
+        renderSegments(titleSpan, item.primary);
+
+        textDiv.appendChild(titleSpan);
+        if (item.secondary.length > 0) {
+          const urlSpan = document.createElement("span");
+          urlSpan.className = "xun-url";
+          renderSegments(urlSpan, item.secondary);
+          textDiv.appendChild(urlSpan);
+        }
+
+        row.appendChild(typeSpan);
+        row.appendChild(textDiv);
+        row.addEventListener("click", (ev) => onResultAction(i, isMac ? ev.metaKey : ev.ctrlKey));
+        row.addEventListener("mouseenter", () => onResultHover(i));
+        resultsEl.appendChild(row);
+      });
+      const labels = resultsEl.querySelectorAll<HTMLSpanElement>(".xun-type");
+      const widths = new Set<number>();
+      labels.forEach(l => { if (l.style.display !== "none") widths.add(l.offsetWidth); });
+      if (widths.size > 1) {
+        const max = Math.max(...widths) + "px";
+        labels.forEach(l => { if (l.style.display !== "none") l.style.minWidth = max; });
+      }
+    } else {
+      // Selection-only update
+      resultsEl.querySelectorAll(".xun-selected").forEach(el => el.classList.remove("xun-selected"));
+    }
+    const selIdx = model.results.findIndex(it => it.selected);
+    const selRow = resultsEl.children[selIdx] as HTMLElement | undefined;
+    if (selRow) { selRow.classList.add("xun-selected"); selRow.scrollIntoView({ block: "nearest" }); }
+
+    // ── Plugin label ──
+    if (!prev || prev.pluginLabel !== model.pluginLabel) {
+      pluginLabelEl.textContent = model.pluginLabel.text;
+      pluginLabelEl.style.background = model.pluginLabel.bg;
+      pluginLabelEl.style.color = model.pluginLabel.color;
+      pluginLabelEl.style.display = model.pluginLabel.visible ? "inline-block" : "none";
     }
 
-    row.appendChild(typeSpan);
-    row.appendChild(textDiv);
-    row.addEventListener("click", (ev) => onAction(i, isMac ? ev.metaKey : ev.ctrlKey));
-    row.addEventListener("mouseenter", () => onHover(i));
-    container.appendChild(row);
-  });
+    // ── Ghost ──
+    if (!prev || prev.ghost !== model.ghost) {
+      ghostEl.textContent = model.ghost.ghost;
+      ghostMirrorEl.textContent = model.ghost.mirror;
+    }
+
+    // ── Preview ──
+    if (!prev || prev.preview !== model.preview) {
+      previewEl.textContent = model.preview.text;
+      previewEl.style.display = model.preview.visible ? "block" : "none";
+    }
+
+    prev = model;
+  };
 }
 
-function renderPluginLabel(container: HTMLElement, model: PluginLabelModel): void {
-  container.textContent = model.text;
-  (container as HTMLElement).style.background = model.bg;
-  (container as HTMLElement).style.color = model.color;
-  (container as HTMLElement).style.display = model.visible ? "inline-block" : "none";
-}
-
-function renderGhostModel(ghostEl: HTMLElement, mirrorEl: HTMLElement, model: GhostModel): void {
-  ghostEl.textContent = model.ghost;
-  mirrorEl.textContent = model.mirror;
-}
-
-function renderPreviewModel(container: HTMLElement, model: PreviewModel): void {
-  container.textContent = model.text;
-  (container as HTMLElement).style.display = model.visible ? "block" : "none";
+/** Compare results ignoring the `selected` field */
+function resultsContentEqual(a: ResultItemModel[], b: ResultItemModel[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const ai = a[i]!, bi = b[i]!;
+    if (ai.label !== bi.label || ai.labelBg !== bi.labelBg || ai.primary !== bi.primary || ai.secondary !== bi.secondary) return false;
+  }
+  return true;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -145,13 +167,6 @@ let shadow: ShadowRoot | null = null;
 let overlay: HTMLDivElement | null = null;
 let deepTimer: ReturnType<typeof setTimeout> | null = null;
 let searchEngine = "https://www.google.com/search?q=%s";
-
-// DOM element refs (set in open(), cleared in close())
-let resultsEl: HTMLDivElement | null = null;
-let previewEl: HTMLElement | null = null;
-let pluginLabelEl: HTMLSpanElement | null = null;
-let ghostEl: HTMLSpanElement | null = null;
-let ghostMirrorEl: HTMLSpanElement | null = null;
 
 function looksLikeUrl(s: string): boolean {
   if (s.includes(" ")) return false;
@@ -194,7 +209,7 @@ function handleResultAction(index: number, newTab: boolean): void {
     if (fr.action === "copy") { navigator.clipboard.writeText(fr.value); close(); }
     else {
       const input = overlay!.querySelector<HTMLInputElement>("#xun-input")!;
-      const prefix = state.functionalPlugin?.prefix ?? fr.value.split(" ")[0] ?? "";
+      const prefix = fr.fillValue ?? state.functionalPlugin?.prefix ?? fr.value.split(" ")[0] ?? "";
       input.value = prefix + " ";
       input.dispatchEvent(new Event("input"));
     }
@@ -283,37 +298,15 @@ function open(): void {
   shadow.appendChild(overlay);
   document.documentElement.appendChild(host);
 
-  // Grab DOM refs
-  resultsEl = overlay.querySelector<HTMLDivElement>("#xun-results")!;
-  previewEl = overlay.querySelector<HTMLElement>("#xun-preview")!;
-  pluginLabelEl = overlay.querySelector<HTMLSpanElement>("#xun-plugin-label")!;
-  ghostEl = overlay.querySelector<HTMLSpanElement>("#xun-ghost")!;
-  ghostMirrorEl = overlay.querySelector<HTMLSpanElement>("#xun-ghost-mirror")!;
-
-  // ── Layer 2 → Layer 3 wiring ──
-  // State changes → compute models → render
-  onState(["results", "functionalResults", "mode", "selectedIndex", "sourceColors", "hasPrefix", "query"], () => {
-    renderResultItems(resultsEl!, computeResultItems(state), handleResultAction, handleResultHover);
-  });
-
-  onState(["activePlugin", "source", "sourceColors", "functionalPlugin", "functionalListing"], () => {
-    renderPluginLabel(pluginLabelEl!, computePluginLabel(state));
-  });
-
-  onState(["ghost", "query"], () => {
-    renderGhostModel(ghostEl!, ghostMirrorEl!, computeGhost(state));
-  });
-
-  onState(["selectedIndex", "results", "mode"], () => {
-    renderPreviewModel(previewEl!, computePreview(state));
-  });
+  // ── Single renderer: State → computeUI → render ──
+  render = createRenderer(overlay, handleResultAction, handleResultHover);
 
   const input = overlay.querySelector<HTMLInputElement>("#xun-input")!;
   input.focus();
   input.addEventListener("input", onInput);
   overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
   overlay.addEventListener("mousemove", () => {
-    if (resultsEl) resultsEl.style.pointerEvents = "auto";
+    overlay!.querySelector<HTMLDivElement>("#xun-results")!.style.pointerEvents = "auto";
   });
   document.addEventListener("keydown", onKeydown, true);
   document.addEventListener("keyup", stopEvent, true);
@@ -326,15 +319,9 @@ function close(): void {
   host = null;
   shadow = null;
   overlay = null;
-  resultsEl = null;
-  previewEl = null;
-  pluginLabelEl = null;
-  ghostEl = null;
-  ghostMirrorEl = null;
+  render = null;
+  renderPending = false;
   state = { query: "", mode: "normal", selectedIndex: -1, results: [], functionalResults: [], activePlugin: null, source: null, sourceColors: state.sourceColors, hasPrefix: false, ghost: "", functionalPlugin: null, functionalListing: false };
-  pendingKeys.clear();
-  pendingFlush = false;
-  for (const k of Object.keys(stateListeners) as StateKey[]) delete stateListeners[k];
   document.removeEventListener("keydown", onKeydown, true);
   document.removeEventListener("keyup", stopEvent, true);
   document.removeEventListener("keypress", stopEvent, true);
@@ -355,7 +342,7 @@ function onInput(e: Event): void {
     // #IF_DEV
     console.log("[xun:content] sending fn message:", trimmed);
     // #END_IF_DEV
-    browser.runtime.sendMessage({ type: "fn", query: trimmed }).then((res: unknown) => {
+    browser.runtime.sendMessage({ type: "fn", query: query.trimStart() }).then((res: unknown) => {
       // #IF_DEV
       console.log("[xun:content] fn response:", JSON.stringify(res));
       // #END_IF_DEV

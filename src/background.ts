@@ -12,6 +12,7 @@ declare const queryBookmarks: typeof import("./lib").queryBookmarks;
 declare const queryTabs: typeof import("./lib").queryTabs;
 
 declare const computeExpression: typeof import("./lib").computeExpression;
+declare const fuzzyMatch: typeof import("./lib").fuzzyMatch;
 
 import type { BookmarkEntry, Config, FnResponse, HistoryEntry, SearchResponse, TabEntry } from "./types";
 
@@ -126,6 +127,21 @@ const fnPlugins: FnPlugin[] = [
       if (!q) return [{ value: this.prefix + " — " + this.description, action: "fill" as const }];
       const r = computeExpression(q);
       return r ? [{ value: r, action: "copy" as const }] : [];
+    },
+  },
+  {
+    name: "Plugins", prefix: "/plugins", description: "Browse registered plugins",
+    run(q) {
+      const plugins = config.plugins ?? [];
+      if (!plugins.length) return [{ value: "No plugins configured", action: "fill" as const }];
+      const results = plugins.map(p => {
+        const secondary = "patterns" in p ? p.patterns.join(", ") : p.url;
+        const score = q ? Math.max(fuzzyMatch(p.name, q), fuzzyMatch(p.prefix, q), fuzzyMatch(secondary, q)) : 1;
+        return { p, secondary, score };
+      }).filter(x => x.score > 0).sort((a, b) => b.score - a.score);
+      return results.map(({ p, secondary }) => ({
+        value: p.prefix, action: "fill" as const, label: p.name, labelColor: p.color, secondary, fillValue: p.prefix,
+      }));
     },
   },
 ];

@@ -81,7 +81,7 @@ export interface SearchResponse {
 
 // Functional plugin protocol (content ↔ background)
 export interface FnMatch { name: string; prefix: string; }
-export interface FnResult { value: string; action: "copy" | "fill"; }
+export interface FnResult { value: string; action: "copy" | "fill"; label?: string; labelColor?: string; secondary?: string; fillValue?: string; }
 export interface FnResponse { match: FnMatch | null; results: FnResult[]; }
 
 // --- Render data model (Layer 2: computed from state, consumed by renderers) ---
@@ -123,3 +123,10 @@ export interface PluginLabelModel {
 
 export interface GhostModel { ghost: string; mirror: string; }
 export interface PreviewModel { text: string; visible: boolean; }
+
+export interface UIModel {
+  results: ResultItemModel[];
+  pluginLabel: PluginLabelModel;
+  ghost: GhostModel;
+  preview: PreviewModel;
+}

@@ -204,6 +204,41 @@ describe("computeResultItems", () => {
     expect(items[0]!.selected).toBe(true);
     expect(items[1]!.selected).toBe(false);
   });
+
+  test("functional mode with label and secondary", () => {
+    const s = makeState({
+      mode: "functional",
+      query: "/plugins ",
+      hasPrefix: true,
+      functionalResults: [
+        { value: "cp", action: "fill", label: "CodePackage", labelColor: "#89b4fa", secondary: "code.amazon.com/packages/**" },
+      ],
+      selectedIndex: 0,
+    });
+    const items = computeResultItems(s);
+    expect(items[0]!.label).toBe("CodePackage");
+    expect(items[0]!.labelColor).toBe("#89b4fa");
+    expect(items[0]!.primary).toEqual([{ text: "cp", highlight: false }]);
+    expect(items[0]!.secondary).toEqual([{ text: "code.amazon.com/packages/**", highlight: false }]);
+  });
+
+  test("functional mode highlights primary and secondary with query", () => {
+    const s = makeState({
+      mode: "functional",
+      query: "/plugins task",
+      hasPrefix: true,
+      functionalResults: [
+        { value: "tt", action: "fill", label: "TaskeiTask", labelColor: "#cba6f7", secondary: "taskei.amazon.dev/tasks/**" },
+      ],
+      selectedIndex: 0,
+    });
+    const items = computeResultItems(s);
+    expect(items[0]!.primary).toEqual([{ text: "tt", highlight: false }]);
+    expect(items[0]!.secondary).toEqual([
+      { text: "task", highlight: true },
+      { text: "ei.amazon.dev/tasks/**", highlight: false },
+    ]);
+  });
 });
 
 describe("computePluginLabel", () => {
