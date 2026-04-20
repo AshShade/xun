@@ -152,8 +152,9 @@ function createRenderer(
 function resultsContentEqual(a: ResultItemModel[], b: ResultItemModel[]): boolean {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) {
-    const ai = a[i]!, bi = b[i]!;
-    if (ai.label !== bi.label || ai.labelBg !== bi.labelBg || ai.primary !== bi.primary || ai.secondary !== bi.secondary) return false;
+    const { selected: _a, ...ra } = a[i]!;
+    const { selected: _b, ...rb } = b[i]!;
+    if (JSON.stringify(ra) !== JSON.stringify(rb)) return false;
   }
   return true;
 }
