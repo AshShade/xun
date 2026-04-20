@@ -48,12 +48,13 @@ export function computeResultItems(s: State): ResultItemModel[] {
     const fnQ = s.query.trim().split(" ").slice(1).join(" ").trim();
     return s.functionalResults.map((item, i) => {
       const color = item.labelColor || "";
+      const hl = fnQ && !item.noHighlight;
       return {
         label: item.label || "",
         labelBg: color ? hexToRgba(color, 0.15) : "",
         labelColor: color,
-        primary: fnQ && item.label ? segmentHighlight(item.value, fnQ) : [{ text: item.value, highlight: false }],
-        secondary: item.secondary ? (fnQ ? segmentHighlight(item.secondary, fnQ) : [{ text: item.secondary, highlight: false }]) : [],
+        primary: hl && item.label ? segmentHighlight(item.value, fnQ) : [{ text: item.value, highlight: false }],
+        secondary: item.secondary ? (hl ? segmentHighlight(item.secondary, fnQ) : [{ text: item.secondary, highlight: false }]) : [],
         selected: i === s.selectedIndex,
       };
     });

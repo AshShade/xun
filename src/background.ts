@@ -130,6 +130,17 @@ const fnPlugins: FnPlugin[] = [
     },
   },
   {
+    name: "Translate", prefix: "/translate", description: "Translate between English and Chinese",
+    run(q) {
+      if (!q) return [{ value: this.prefix + " — " + this.description, action: "fill" as const }];
+      const hasCJK = /[\u4e00-\u9fff]/.test(q);
+      const sl = hasCJK ? "zh-CN" : "en";
+      const tl = hasCJK ? "en" : "zh-CN";
+      const url = `https://translate.google.com/?sl=${sl}&tl=${tl}&text=${encodeURIComponent(q)}&op=translate`;
+      return [{ value: `${hasCJK ? "中→EN" : "EN→中"}: ${q}`, action: "open" as const, url, secondary: "Open Google Translate", noHighlight: true }];
+    },
+  },
+  {
     name: "Plugins", prefix: "/plugins", description: "Browse registered plugins",
     run(q) {
       const plugins = config.plugins ?? [];

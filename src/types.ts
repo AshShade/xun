@@ -81,7 +81,7 @@ export interface SearchResponse {
 
 // Functional plugin protocol (content ↔ background)
 export interface FnMatch { name: string; prefix: string; }
-export interface FnResult { value: string; action: "copy" | "fill"; label?: string; labelColor?: string; secondary?: string; fillValue?: string; }
+export interface FnResult { value: string; action: "copy" | "fill" | "open"; label?: string; labelColor?: string; secondary?: string; fillValue?: string; url?: string; noHighlight?: boolean; }
 export interface FnResponse { match: FnMatch | null; results: FnResult[]; }
 
 // --- Render data model (Layer 2: computed from state, consumed by renderers) ---

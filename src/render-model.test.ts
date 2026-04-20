@@ -240,6 +240,21 @@ describe("computeResultItems", () => {
       { text: "s.example.dev/tasks/**", highlight: false },
     ]);
   });
+  test("functional mode with open action and url", () => {
+    const s = makeState({
+      mode: "functional",
+      query: "/translate hello",
+      hasPrefix: true,
+      functionalResults: [
+        { value: "EN→中: hello", action: "open", url: "https://translate.google.com/?sl=en&tl=zh-CN&text=hello&op=translate", secondary: "Open Google Translate", noHighlight: true },
+      ],
+      selectedIndex: 0,
+    });
+    const items = computeResultItems(s);
+    expect(items).toHaveLength(1);
+    expect(items[0]!.primary).toEqual([{ text: "EN→中: hello", highlight: false }]);
+    expect(items[0]!.secondary).toEqual([{ text: "Open Google Translate", highlight: false }]);
+  });
 });
 
 describe("computePluginLabel", () => {

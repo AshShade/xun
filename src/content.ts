@@ -207,6 +207,7 @@ function handleResultAction(index: number, newTab: boolean): void {
     const fr = state.functionalResults[index];
     if (!fr) return;
     if (fr.action === "copy") { navigator.clipboard.writeText(fr.value); close(); }
+    else if (fr.action === "open" && fr.url) { window.open(fr.url, newTab ? "_blank" : "_self"); close(); }
     else {
       const input = overlay!.querySelector<HTMLInputElement>("#xun-input")!;
       const prefix = fr.fillValue ?? state.functionalPlugin?.prefix ?? fr.value.split(" ")[0] ?? "";
