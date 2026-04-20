@@ -179,24 +179,14 @@ function looksLikeUrl(s: string): boolean {
 function detectMode(): Mode {
   if (state.functionalListing || state.functionalPlugin) return "functional";
   if (state.activePlugin) return "plugin";
-  const q = state.query.trim();
-  if (q.startsWith('"') && q.endsWith('"')) return "normal";
-  if (!q.includes(" ") && (/[./]/.test(q) || q.includes("://"))) return "address";
   return "normal";
 }
 
-function computeGhostText(): string {
-  if (state.mode !== "address" || !state.results.length) return "";
-  const q = state.query.toLowerCase();
-  for (const r of state.results) {
-    const url = r.url.toLowerCase();
-    if (url.startsWith(q)) return r.url.slice(state.query.length);
-    const bare = url.replace(/^https?:\/\//, "");
-    if (bare.startsWith(q)) return bare.slice(state.query.length);
-    const noWww = bare.replace(/^www\./, "");
-    if (noWww.startsWith(q)) return noWww.slice(state.query.length);
-  }
-  return "";
+function requestGhost(): void {
+  if (state.mode !== "normal") { setState({ ghost: "" }); return; }
+  browser.runtime.sendMessage({ type: "suggest", query: state.query }).then((ghost: unknown) => {
+    if (typeof ghost === "string") setState({ ghost });
+  });
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -381,7 +371,8 @@ function onInput(e: Event): void {
       functionalResults: [], functionalPlugin: null, functionalListing: false,
     });
     const mode = detectMode();
-    setState({ mode, ghost: mode === "address" ? computeGhostText() : "" });
+    setState({ mode });
+    requestGhost();
   });
   deepTimer = setTimeout(() => {
     browser.runtime.sendMessage({ type: "deep-search", query: searchQuery }).then((raw: unknown) => {
@@ -398,7 +389,8 @@ function onInput(e: Event): void {
         functionalResults: [], functionalPlugin: null, functionalListing: false,
       });
       const mode = detectMode();
-      setState({ mode, ghost: mode === "address" ? computeGhostText() : "" });
+      setState({ mode });
+      requestGhost();
     });
   }, 300);
 }

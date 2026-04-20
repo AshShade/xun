@@ -13,6 +13,7 @@ declare const queryTabs: typeof import("./lib").queryTabs;
 
 declare const computeExpression: typeof import("./lib").computeExpression;
 declare const fuzzyMatch: typeof import("./lib").fuzzyMatch;
+declare const suggestGhost: typeof import("./lib").suggestGhost;
 
 import type { BookmarkEntry, Config, FnResponse, HistoryEntry, SearchResponse, TabEntry } from "./types";
 
@@ -49,7 +50,8 @@ interface DeepSearchMessage { type: "deep-search"; query: string }
 interface RefreshMessage { type: "refresh-cache" }
 interface GetConfigMessage { type: "get-config" }
 interface FnMessage { type: "fn"; query: string }
-type Message = NavigateMessage | SearchMessage | DeepSearchMessage | RefreshMessage | GetConfigMessage | FnMessage;
+interface SuggestMessage { type: "suggest"; query: string }
+type Message = NavigateMessage | SearchMessage | DeepSearchMessage | RefreshMessage | GetConfigMessage | FnMessage | SuggestMessage;
 
 browser.runtime.onMessage.addListener((msg: Message, sender: browser.runtime.MessageSender, sendResponse: (response: unknown) => void): true | void => {
   if (msg.type === "fn") {
@@ -67,6 +69,10 @@ browser.runtime.onMessage.addListener((msg: Message, sender: browser.runtime.Mes
   }
   if (msg.type === "deep-search") {
     deepSearch(msg.query).then(sendResponse);
+    return true;
+  }
+  if (msg.type === "suggest") {
+    sendResponse(handleSuggest(msg.query));
     return true;
   }
   if (msg.type === "navigate") {
@@ -189,4 +195,11 @@ function handleFn(raw: string): FnResponse {
     match: null,
     results: scored.map(({ p }) => ({ value: p.prefix + " — " + p.description, action: "fill" as const })),
   };
+}
+
+function handleSuggest(query: string): string {
+  const entries: { url: string; visitCount: number }[] = [];
+  for (const [, h] of historyCache) entries.push({ url: h.url, visitCount: h.visitCount });
+  for (const b of bookmarkCache) entries.push({ url: b.url, visitCount: 0 });
+  return suggestGhost(query, entries);
 }

@@ -86,7 +86,7 @@ export interface FnResponse { match: FnMatch | null; results: FnResult[]; }
 
 // --- Render data model (Layer 2: computed from state, consumed by renderers) ---
 
-export type Mode = "normal" | "plugin" | "address" | "functional";
+export type Mode = "normal" | "plugin" | "functional";
 
 export interface State {
   query: string;

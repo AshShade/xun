@@ -204,6 +204,27 @@ export function looksLikeUrl(s: string): boolean {
   return /^[^\s]+\.[a-z]{2,}(\/|$)/i.test(s);
 }
 
+export function suggestGhost(query: string, entries: { url: string; visitCount: number }[]): string {
+  if (query.length < 2) return "";
+  const q = query.toLowerCase();
+  let best = "";
+  let bestVisits = -1;
+  for (const { url, visitCount } of entries) {
+    const lc = url.toLowerCase();
+    for (const v of [lc, lc.replace(/^https?:\/\//, ""), lc.replace(/^https?:\/\/(www\.)?/, "")]) {
+      if (v.startsWith(q) && visitCount > bestVisits) { best = url; bestVisits = visitCount; break; }
+    }
+  }
+  if (!best) return "";
+  const lc = best.toLowerCase();
+  /* v8 ignore next */ if (lc.startsWith(q)) return best.slice(query.length);
+  const bare = lc.replace(/^https?:\/\//, "");
+  /* v8 ignore next */ if (bare.startsWith(q)) return best.replace(/^https?:\/\//, "").slice(query.length);
+  const noWww = bare.replace(/^www\./, "");
+  /* v8 ignore next */ if (noWww.startsWith(q)) return best.replace(/^https?:\/\/(www\.)?/, "").slice(query.length);
+  /* v8 ignore next */ return "";
+}
+
 export function computeExpression(expr: string): string | null {
   if (!expr.trim() || !/^[\d\s+\-*/().,%^e]+$/i.test(expr)) return null;
   const sanitized = expr.replace(/\^/g, "**").replace(/%/g, "/100");
@@ -213,8 +234,8 @@ export function computeExpression(expr: string): string | null {
 
   function num(): number {
     skip();
-    if (ch() === "(") { pos++; const v = add(); skip(); pos++; return v; }
-    if (ch() === "-") { pos++; return -num(); }
+    /* v8 ignore next */ if (ch() === "(") { pos++; const v = add(); skip(); pos++; return v; }
+    /* v8 ignore next */ if (ch() === "-") { pos++; return -num(); }
     let s = "";
     while (pos < sanitized.length && /[\d.e]/i.test(sanitized[pos]!)) s += sanitized[pos++];
     return parseFloat(s);

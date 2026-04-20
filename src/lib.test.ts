@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { globMatch, matchesPlugin, parseQuery, decayScore, TAB_BONUS, BOOKMARK_BONUS, fuzzyMatch, mergeResults, urlKey, validateConfig, mergeHistoryCache, queryHistory, queryBookmarks, queryTabs, looksLikeUrl, computeExpression } from "./lib";
+import { globMatch, matchesPlugin, parseQuery, decayScore, TAB_BONUS, BOOKMARK_BONUS, fuzzyMatch, mergeResults, urlKey, validateConfig, mergeHistoryCache, queryHistory, queryBookmarks, queryTabs, looksLikeUrl, computeExpression, suggestGhost } from "./lib";
 import { truncateUrl, buildResultRow } from "./dom";
 import type { Config, HistoryEntry, PatternPlugin, SearchPlugin, SearchResult } from "./types";
 
@@ -542,5 +542,50 @@ describe("validateConfig rejects / prefixes", () => {
     });
     expect(config.plugins).toHaveLength(1);
     expect(config.plugins[0]!.name).toBe("Good");
+  });
+});
+
+describe("suggestGhost", () => {
+  const entries = [
+    { url: "https://github.com/user/repo", visitCount: 10 },
+    { url: "https://github.com/user/other", visitCount: 5 },
+    { url: "https://www.google.com/search", visitCount: 20 },
+    { url: "https://example.com/page", visitCount: 0 },
+  ];
+
+  it("suggests url suffix for prefix match", () => {
+    expect(suggestGhost("github.com/user/r", entries)).toBe("epo");
+  });
+
+  it("strips protocol for matching", () => {
+    expect(suggestGhost("github", entries)).toBe(".com/user/repo");
+  });
+
+  it("strips www for matching", () => {
+    expect(suggestGhost("google", entries)).toBe(".com/search");
+  });
+
+  it("picks highest visitCount", () => {
+    expect(suggestGhost("github.com/user/", entries)).toBe("repo");
+  });
+
+  it("returns empty for no match", () => {
+    expect(suggestGhost("zzz", entries)).toBe("");
+  });
+
+  it("returns empty for short query", () => {
+    expect(suggestGhost("g", entries)).toBe("");
+  });
+
+  it("case insensitive", () => {
+    expect(suggestGhost("GitHub", entries)).toBe(".com/user/repo");
+  });
+
+  it("bookmarks with visitCount 0 lose to history", () => {
+    const mixed = [
+      { url: "https://example.com/page", visitCount: 0 },
+      { url: "https://example.com/better", visitCount: 3 },
+    ];
+    expect(suggestGhost("example.com/", mixed)).toBe("better");
   });
 });
