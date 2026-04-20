@@ -4,3 +4,4 @@ web-ext-artifacts/
 node_modules/
 coverage/
 dist/
+worktrees/
