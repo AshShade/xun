@@ -55,3 +55,30 @@ const branch = (() => {
 fs.writeFileSync(path.join("dist", ".build-info"), `branch=${branch}\nversion=${version}\n`);
 
 console.log(`Built ${version} [${branch}]${release ? " (release)" : ""}`);
+
+// 6. Release: create browser-specific dist directories
+if (release) {
+  function copyDirSync(src, dst) {
+    fs.mkdirSync(dst, { recursive: true });
+    for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+      const s = path.join(src, entry.name), d = path.join(dst, entry.name);
+      entry.isDirectory() ? copyDirSync(s, d) : fs.copyFileSync(s, d);
+    }
+  }
+
+  // Firefox: keep as-is (supports both scripts and service_worker keys)
+  copyDirSync("dist", "dist-firefox");
+  const ffManifest = JSON.parse(fs.readFileSync("dist-firefox/manifest.json", "utf8"));
+  delete ffManifest.background.service_worker;
+  fs.writeFileSync("dist-firefox/manifest.json", JSON.stringify(ffManifest, null, 2) + "\n");
+
+  // Chrome: strip Firefox-specific fields
+  copyDirSync("dist", "dist-chrome");
+  const crManifest = JSON.parse(fs.readFileSync("dist-chrome/manifest.json", "utf8"));
+  delete crManifest.browser_specific_settings;
+  delete crManifest.background.scripts;
+  fs.writeFileSync("dist-chrome/manifest.json", JSON.stringify(crManifest, null, 2) + "\n");
+
+  console.log(`  → dist-firefox/ (MV3 + scripts)`);
+  console.log(`  → dist-chrome/  (MV3 + service_worker)`);
+}

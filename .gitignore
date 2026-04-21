@@ -4,4 +4,6 @@ web-ext-artifacts/
 node_modules/
 coverage/
 dist/
+dist-firefox/
+dist-chrome/
 worktrees/
