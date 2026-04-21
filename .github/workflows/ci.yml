@@ -31,6 +31,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build:release
+      - run: npx web-ext lint --source-dir dist-firefox
       - run: npx web-ext build --source-dir dist-firefox --artifacts-dir artifacts --overwrite-dest
       - name: Sign and publish to AMO
         run: npx web-ext sign --source-dir dist-firefox --artifacts-dir artifacts --channel listed --amo-metadata amo-metadata.json --timeout 900000 || echo "Timed out waiting for approval — submission was successful, check AMO dashboard"
@@ -55,7 +56,7 @@ jobs:
       - run: npm ci
       - run: npm run build:release
       - name: Build Chrome zip
-        run: cd dist-chrome && zip -r ../artifacts/xun-chrome.zip . && cd ..
+        run: mkdir -p artifacts && cd dist-chrome && zip -r ../artifacts/xun-chrome.zip .
       - name: Upload to Chrome Web Store
         uses: mnao305/chrome-extension-upload@v5
         with:
