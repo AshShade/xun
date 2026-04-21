@@ -128,7 +128,7 @@ function saveConfig(): void {
     searchEngine: searchEngine.value || DEFAULT_CONFIG.searchEngine,
     plugins,
   };
-  browser.storage.local.set({ config }).then(flash);
+  chrome.storage.local.set({ config }).then(flash);
 }
 
 function addCategoryRow(cat: Partial<Plugin> = {}): void {
@@ -172,7 +172,7 @@ function addCategoryRow(cat: Partial<Plugin> = {}): void {
 }
 
 // Load
-browser.storage.local.get(["shortcut", "config"]).then(({ shortcut, config }: { shortcut?: Shortcut; config?: Config }) => {
+chrome.storage.local.get(["shortcut", "config"]).then(({ shortcut, config }: { shortcut?: Shortcut; config?: Config }) => {
   shortcutInput.value = shortcutToString(shortcut || DEFAULT_SHORTCUT);
   const c: Config = validateConfig(config);
   prefixHistory.value = c.prefixes["history"] ?? "h";
@@ -192,7 +192,7 @@ shortcutInput.addEventListener("keydown", (e: KeyboardEvent) => {
   if (["Control", "Alt", "Shift", "Meta"].includes(e.key)) return;
   const s: Shortcut = { ctrlKey: e.ctrlKey, shiftKey: e.shiftKey, altKey: e.altKey, metaKey: e.metaKey, key: e.key };
   shortcutInput.value = shortcutToString(s);
-  browser.storage.local.set({ shortcut: s }).then(flash);
+  chrome.storage.local.set({ shortcut: s }).then(flash);
 });
 
 [prefixHistory, prefixTabs, prefixBookmarks, searchEngine].forEach((el) => el.addEventListener("input", saveConfig));
@@ -203,5 +203,5 @@ document.addEventListener("click", () => {
 });
 
 document.getElementById("edit-json")!.addEventListener("click", () => {
-  browser.tabs.create({ url: browser.runtime.getURL("editor.html") });
+  chrome.tabs.create({ url: chrome.runtime.getURL("editor.html") });
 });

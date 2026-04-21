@@ -32,7 +32,12 @@ for (const f of fs.readdirSync("dist").filter(f => f.endsWith(".js"))) {
   fs.writeFileSync(fp, code);
 }
 
-// 4. Write .build-info for TUI switcher
+// 4. Bundle background: lib.js + render-model.js + background.js → background.bundle.js
+const bundleParts = ["lib.js", "render-model.js", "background.js"];
+const bundle = bundleParts.map(f => fs.readFileSync(path.join("dist", f), "utf8")).join("\n");
+fs.writeFileSync(path.join("dist", "background.bundle.js"), bundle);
+
+// 5. Write .build-info for TUI switcher
 const branch = (() => {
   try {
     const head = fs.readFileSync(".git", "utf8").trim();

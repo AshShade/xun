@@ -19,7 +19,7 @@ function flash(msg: string, ok: boolean): void {
   setTimeout(() => { statusEl.style.opacity = "0"; }, 2000);
 }
 
-browser.storage.local.get(["shortcut", "config"]).then(({ shortcut, config }: { shortcut?: Shortcut; config?: Config }) => {
+chrome.storage.local.get(["shortcut", "config"]).then(({ shortcut, config }: { shortcut?: Shortcut; config?: Config }) => {
   editor.value = JSON.stringify({ shortcut: shortcut || DEFAULTS.shortcut, config: config || DEFAULTS.config }, null, 2);
 });
 
@@ -27,8 +27,8 @@ document.getElementById("save-btn")!.addEventListener("click", () => {
   try {
     const data = JSON.parse(editor.value) as { shortcut?: Shortcut; config?: Config };
     const promises: Promise<void>[] = [];
-    if (data.shortcut) promises.push(browser.storage.local.set({ shortcut: data.shortcut }));
-    if (data.config) promises.push(browser.storage.local.set({ config: data.config }));
+    if (data.shortcut) promises.push(chrome.storage.local.set({ shortcut: data.shortcut }));
+    if (data.config) promises.push(chrome.storage.local.set({ config: data.config }));
     Promise.all(promises).then(() => flash("Saved", true));
   } catch (e) {
     flash("Invalid JSON: " + (e instanceof Error ? e.message : String(e)), false);
@@ -71,3 +71,30 @@ document.getElementById("toggle-docs")!.addEventListener("click", () => {
 });
 
 // Doc examples are inline in editor.html
+
+// --- Remote Sync ---
+const syncUrlInput = document.getElementById("sync-url") as HTMLInputElement;
+const syncStatusEl = document.getElementById("sync-status")!;
+
+chrome.storage.local.get(["syncUrl", "syncLastModified"]).then(({ syncUrl, syncLastModified }: { syncUrl?: string; syncLastModified?: string }) => {
+  syncUrlInput.value = syncUrl || "";
+  syncStatusEl.textContent = syncLastModified ? `Last sync: ${new Date(syncLastModified).toLocaleString()}` : "Not synced";
+});
+
+syncUrlInput.addEventListener("change", () => {
+  const url = syncUrlInput.value.trim().replace(/\/+$/, "");
+  chrome.storage.local.set({ syncUrl: url }).then(() => flash("Sync URL saved", true));
+});
+
+document.getElementById("force-sync")!.addEventListener("click", () => {
+  const url = syncUrlInput.value.trim().replace(/\/+$/, "");
+  chrome.storage.local.set({ syncUrl: url });
+  syncStatusEl.textContent = "Syncing...";
+  chrome.runtime.sendMessage({ type: "force-sync", syncUrl: url }).then(() => {
+    setTimeout(() => {
+      chrome.storage.local.get("syncLastModified").then(({ syncLastModified }: { syncLastModified?: string }) => {
+        syncStatusEl.textContent = syncLastModified ? `Last sync: ${new Date(syncLastModified).toLocaleString()}` : "Sync failed";
+      });
+    }, 2000);
+  });
+});

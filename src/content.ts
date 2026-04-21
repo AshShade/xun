@@ -184,7 +184,7 @@ function detectMode(): Mode {
 
 function requestGhost(): void {
   if (state.mode !== "normal") { setState({ ghost: "" }); return; }
-  browser.runtime.sendMessage({ type: "suggest", query: state.query }).then((ghost: unknown) => {
+  chrome.runtime.sendMessage({ type: "suggest", query: state.query }).then((ghost: unknown) => {
     if (typeof ghost === "string") setState({ ghost });
   });
 }
@@ -216,7 +216,7 @@ function handleResultHover(index: number): void {
 }
 
 function navigate(item: SearchResponse["results"][number], newTab = false): void {
-  browser.runtime.sendMessage({ type: "navigate", url: item.url, tabId: item.tabId, windowId: item.windowId, newTab });
+  chrome.runtime.sendMessage({ type: "navigate", url: item.url, tabId: item.tabId, windowId: item.windowId, newTab });
   close();
 }
 
@@ -230,10 +230,10 @@ const DEFAULT_SHORTCUT: Shortcut = isMac
   : { ctrlKey: true, shiftKey: false, altKey: false, metaKey: false, key: "k" };
 
 let shortcut: Shortcut = DEFAULT_SHORTCUT;
-browser.storage.local.get("shortcut").then(({ shortcut: s }: { shortcut?: Shortcut }) => {
+chrome.storage.local.get("shortcut").then(({ shortcut: s }: { shortcut?: Shortcut }) => {
   if (s) shortcut = s;
 });
-browser.storage.onChanged.addListener((changes: Record<string, browser.storage.StorageChange>) => {
+chrome.storage.onChanged.addListener((changes: Record<string, chrome.storage.StorageChange>) => {
   if (changes["shortcut"]) shortcut = changes["shortcut"].newValue as Shortcut;
 });
 
@@ -245,7 +245,7 @@ document.addEventListener("keydown", (e: KeyboardEvent) => {
   }
 }, true);
 
-browser.runtime.onMessage.addListener((msg: { type: string }) => {
+chrome.runtime.onMessage.addListener((msg: { type: string }) => {
   if (msg.type === "toggle") toggle();
 });
 
@@ -256,8 +256,8 @@ browser.runtime.onMessage.addListener((msg: { type: string }) => {
 function toggle(): void { host ? close() : open(); }
 
 function open(): void {
-  browser.runtime.sendMessage({ type: "refresh-cache" });
-  browser.runtime.sendMessage({ type: "get-config" }).then((raw: unknown) => {
+  chrome.runtime.sendMessage({ type: "refresh-cache" });
+  chrome.runtime.sendMessage({ type: "get-config" }).then((raw: unknown) => {
     const c = raw as { searchEngine?: string };
     if (c.searchEngine) searchEngine = c.searchEngine;
   });
@@ -267,7 +267,7 @@ function open(): void {
 
   const link = document.createElement("link");
   link.rel = "stylesheet";
-  link.href = browser.runtime.getURL("xun.css");
+  link.href = chrome.runtime.getURL("xun.css");
   shadow.appendChild(link);
 
   overlay = document.createElement("div");
@@ -334,7 +334,7 @@ function onInput(e: Event): void {
     // #IF_DEV
     console.log("[xun:content] sending fn message:", trimmed);
     // #END_IF_DEV
-    browser.runtime.sendMessage({ type: "fn", query: query.trimStart() }).then((res: unknown) => {
+    chrome.runtime.sendMessage({ type: "fn", query: query.trimStart() }).then((res: unknown) => {
       // #IF_DEV
       console.log("[xun:content] fn response:", JSON.stringify(res));
       // #END_IF_DEV
@@ -358,7 +358,7 @@ function onInput(e: Event): void {
     setState({ query, results: [], hasPrefix: false, selectedIndex: -1, activePlugin: null, source: null, mode: "normal", ghost: "", functionalResults: [], functionalPlugin: null, functionalListing: false });
     return;
   }
-  browser.runtime.sendMessage({ type: "search", query: searchQuery }).then((raw: unknown) => {
+  chrome.runtime.sendMessage({ type: "search", query: searchQuery }).then((raw: unknown) => {
     const res = raw as SearchResponse;
     setState({
       query,
@@ -375,7 +375,7 @@ function onInput(e: Event): void {
     requestGhost();
   });
   deepTimer = setTimeout(() => {
-    browser.runtime.sendMessage({ type: "deep-search", query: searchQuery }).then((raw: unknown) => {
+    chrome.runtime.sendMessage({ type: "deep-search", query: searchQuery }).then((raw: unknown) => {
       const res = raw as SearchResponse;
       if (state.query.trim() !== trimmed) return;
       const prevSelected = state.selectedIndex;

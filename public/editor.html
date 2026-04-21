@@ -100,6 +100,17 @@
   "metaKey": true,
   "key": "k"
 }</pre>
+
+    <h3>Remote Sync</h3>
+    <p>Sync config with a <a href="https://github.com/AshShade/remote-fs" style="color:#89b4fa">remote-fs</a> server. Config is stored locally and periodically checked against the remote (every hour). On save, config is pushed immediately. If the remote file doesn't exist yet, local config is uploaded to seed it.</p>
+    <div style="margin:8px 0">
+      <label style="font-size:12px;color:#a6adc8;display:block;margin-bottom:4px">Sync URL</label>
+      <input id="sync-url" type="text" placeholder="http://host:5656/path/to/config.json" style="width:100%;background:#181825;color:#cdd6f4;border:1px solid #313244;border-radius:6px;padding:6px 10px;font-size:13px;font-family:monospace" />
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin:6px 0">
+      <span id="sync-status" style="font-size:12px;color:#585b70"></span>
+      <button id="force-sync" class="small-btn">Sync now</button>
+    </div>
   </div>
   <script src="lib.js"></script>
   <script src="editor.js"></script>

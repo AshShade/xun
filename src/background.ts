@@ -1,5 +1,6 @@
-// Background script: handles search across history, bookmarks, and tabs
-// lib.ts functions are loaded via manifest scripts array
+// Background script (MV3 service worker): handles search across history, bookmarks, and tabs
+// In MV3, this runs as a service worker — caches re-init on every wake via refreshCaches()
+// lib.ts and render-model.ts are bundled into background.bundle.js by build.js
 
 declare const matchesPlugin: typeof import("./lib").matchesPlugin;
 declare const parseQuery: typeof import("./lib").parseQuery;
@@ -18,12 +19,80 @@ declare const suggestGhost: typeof import("./lib").suggestGhost;
 import type { BookmarkEntry, Config, FnResponse, HistoryEntry, SearchResponse, TabEntry } from "./types";
 
 let config: Config = { ...DEFAULT_CONFIG };
-browser.storage.local.get("config").then(({ config: c }: { config?: unknown }) => {
+let syncUrl = "";
+let syncLastModified = "";
+let syncingFromRemote = false;
+chrome.storage.local.get(["config", "syncUrl", "syncLastModified"]).then(({ config: c, syncUrl: s, syncLastModified: lm }: { config?: unknown; syncUrl?: string; syncLastModified?: string }) => {
   config = validateConfig(c);
+  syncUrl = s || "";
+  syncLastModified = lm || "";
+  pullRemoteConfig();
 });
-browser.storage.onChanged.addListener((changes: Record<string, browser.storage.StorageChange>) => {
-  if (changes["config"]) config = validateConfig(changes["config"].newValue);
+chrome.storage.onChanged.addListener((changes: Record<string, chrome.storage.StorageChange>) => {
+  // Process syncUrl first so push/pull use the new URL
+  if (changes["syncUrl"]) {
+    const newUrl = (changes["syncUrl"].newValue as string) || "";
+    if (newUrl !== syncUrl) {
+      syncUrl = newUrl;
+      syncLastModified = "";
+    }
+  }
+  if (changes["config"]) {
+    config = validateConfig(changes["config"].newValue);
+    if (!syncingFromRemote) pushRemoteConfig();
+  }
 });
+
+// Periodic sync via chrome.alarms (survives service worker sleep)
+chrome.alarms.create("sync-config", { periodInMinutes: 60 });
+chrome.alarms.onAlarm.addListener((alarm: chrome.alarms.Alarm) => {
+  if (alarm.name === "sync-config") pullRemoteConfig();
+});
+
+function pullRemoteConfig(force = false): void {
+  if (!syncUrl) return;
+  const headers: Record<string, string> = {};
+  if (!force && syncLastModified) headers["If-Modified-Since"] = syncLastModified;
+  // #IF_DEV
+  console.log("[xun:sync] pull", syncUrl, "lastMod:", syncLastModified);
+  // #END_IF_DEV
+  fetch(syncUrl, { method: "HEAD", headers }).then(r => {
+    // #IF_DEV
+    console.log("[xun:sync] HEAD →", r.status, "Last-Modified:", r.headers.get("Last-Modified"));
+    // #END_IF_DEV
+    if (r.status === 304) return;
+    if (r.status === 404) { pushRemoteConfig(); return; }
+    if (!r.ok) return;
+    return fetch(syncUrl).then(r2 => r2.ok ? r2.text() : null).then(text => {
+      if (!text) return;
+      try {
+        config = validateConfig(JSON.parse(text));
+        syncLastModified = r.headers.get("Last-Modified") || "";
+        syncingFromRemote = true;
+        chrome.storage.local.set({ config, syncLastModified }).then(() => { syncingFromRemote = false; });
+      } catch {}
+    });
+  }).catch((e) => { console.error("[xun:sync] pull error:", e); });
+}
+
+function pushRemoteConfig(): void {
+  if (!syncUrl) return;
+  // #IF_DEV
+  console.log("[xun:sync] push", syncUrl);
+  // #END_IF_DEV
+  fetch(syncUrl, {
+    method: "PUT",
+    body: JSON.stringify(config),
+  }).then(r => r.ok ? r.json() : null).then((json: unknown) => {
+    // #IF_DEV
+    console.log("[xun:sync] push response:", json);
+    // #END_IF_DEV
+    if (json && typeof json === "object" && "updatedAt" in json) {
+      syncLastModified = (json as { updatedAt: string }).updatedAt;
+      chrome.storage.local.set({ syncLastModified });
+    }
+  }).catch((e) => { console.error("[xun:sync] push error:", e); });
+}
 
 // Cache layer — raw API data, keyed by exact URL
 const historyCache = new Map<string, HistoryEntry>();
@@ -32,9 +101,9 @@ let tabCache: TabEntry[] = [];
 
 async function refreshCaches(): Promise<void> {
   const [historyItems, bookmarkItems, tabItems] = await Promise.all([
-    browser.history.search({ text: "", maxResults: 1000, startTime: 0 }),
-    browser.bookmarks.getRecent(500),
-    browser.tabs.query({}),
+    chrome.history.search({ text: "", maxResults: 1000, startTime: 0 }),
+    chrome.bookmarks.getRecent(500),
+    chrome.tabs.query({}),
   ]);
   mergeHistoryCache(historyCache, historyItems);
   bookmarkCache = bookmarkItems.filter((b): b is Required<Pick<typeof b, "url" | "title">> => !!(b.url && b.title));
@@ -42,7 +111,7 @@ async function refreshCaches(): Promise<void> {
     .map((t) => ({ url: t.url, title: t.title, tabId: t.id, windowId: t.windowId }));
 }
 
-refreshCaches();
+// Caches are populated by "refresh-cache" message from content.ts on every open
 
 interface NavigateMessage { type: "navigate"; url: string; tabId?: number; windowId?: number; newTab?: boolean }
 interface SearchMessage { type: "search"; query: string }
@@ -51,9 +120,10 @@ interface RefreshMessage { type: "refresh-cache" }
 interface GetConfigMessage { type: "get-config" }
 interface FnMessage { type: "fn"; query: string }
 interface SuggestMessage { type: "suggest"; query: string }
-type Message = NavigateMessage | SearchMessage | DeepSearchMessage | RefreshMessage | GetConfigMessage | FnMessage | SuggestMessage;
+interface ForceSyncMessage { type: "force-sync"; syncUrl?: string }
+type Message = NavigateMessage | SearchMessage | DeepSearchMessage | RefreshMessage | GetConfigMessage | FnMessage | SuggestMessage | ForceSyncMessage;
 
-browser.runtime.onMessage.addListener((msg: Message, sender: browser.runtime.MessageSender, sendResponse: (response: unknown) => void): true | void => {
+chrome.runtime.onMessage.addListener((msg: Message, sender: chrome.runtime.MessageSender, sendResponse: (response: unknown) => void): true | void => {
   if (msg.type === "fn") {
     const r = handleFn(msg.query);
     // #IF_DEV
@@ -62,7 +132,13 @@ browser.runtime.onMessage.addListener((msg: Message, sender: browser.runtime.Mes
     sendResponse(r); return true;
   }
   if (msg.type === "search") { sendResponse(handleSearch(msg.query)); return true; }
-  if (msg.type === "get-config") { sendResponse(config); return true; }
+  if (msg.type === "get-config") { sendResponse({ ...config, syncLastModified }); return true; }
+  if (msg.type === "force-sync") {
+    if (msg.syncUrl) syncUrl = msg.syncUrl;
+    pullRemoteConfig(true);
+    sendResponse({ ok: true });
+    return true;
+  }
   if (msg.type === "refresh-cache") {
     refreshCaches().then(() => sendResponse({ results: [], hasPrefix: false, sourceColors: config.sourceColors, plugin: null, source: null }));
     return true;
@@ -77,12 +153,12 @@ browser.runtime.onMessage.addListener((msg: Message, sender: browser.runtime.Mes
   }
   if (msg.type === "navigate") {
     if (msg.tabId && !msg.newTab) {
-      browser.tabs.update(msg.tabId, { active: true });
-      if (msg.windowId) browser.windows.update(msg.windowId, { focused: true });
+      chrome.tabs.update(msg.tabId, { active: true });
+      if (msg.windowId) chrome.windows.update(msg.windowId, { focused: true });
     } else if (msg.newTab) {
-      browser.tabs.create({ url: msg.url });
+      chrome.tabs.create({ url: msg.url });
     } else if (sender.tab?.id) {
-      browser.tabs.update(sender.tab.id, { url: msg.url });
+      chrome.tabs.update(sender.tab.id, { url: msg.url });
     }
   }
 });
@@ -112,7 +188,7 @@ async function deepSearch(raw: string): Promise<SearchResponse> {
   const { query } = parseQuery(raw, config);
   if (!query || query.length < 2) return handleSearch(raw);
 
-  const apiResults = await browser.history.search({ text: query, maxResults: 100, startTime: 0 });
+  const apiResults = await chrome.history.search({ text: query, maxResults: 100, startTime: 0 });
   mergeHistoryCache(historyCache, apiResults);
 
   return handleSearch(raw);

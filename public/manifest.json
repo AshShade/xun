@@ -1,48 +1,45 @@
 {
-  "manifest_version": 2,
+  "manifest_version": 3,
   "name": "Xun (寻)",
   "version": "0.4.1",
   "description": "Spotlight-style search for browser history, bookmarks, and open tabs",
-  "permissions": [
-    "history",
-    "bookmarks",
-    "tabs",
-    "storage"
-  ],
+  "permissions": ["history", "bookmarks", "tabs", "storage", "alarms"],
+  "host_permissions": ["http://*/", "https://*/"],
   "options_ui": {
     "page": "options.html",
     "open_in_tab": false
   },
   "icons": {
-    "48": "icons/xun.svg",
-    "96": "icons/xun.svg",
-    "128": "icons/xun.svg"
+    "16": "icons/xun-16.png",
+    "32": "icons/xun-32.png",
+    "48": "icons/xun-48.png",
+    "96": "icons/xun-96.png",
+    "128": "icons/xun-128.png"
   },
-  "browser_action": {
-    "default_icon": "icons/xun.svg",
+  "action": {
+    "default_icon": {
+      "16": "icons/xun-16.png",
+      "32": "icons/xun-32.png",
+      "48": "icons/xun-48.png"
+    },
     "default_popup": "options.html",
     "default_title": "Xun (寻) Settings"
   },
   "background": {
-    "scripts": [
-      "lib.js",
-      "render-model.js",
-      "background.js"
-    ]
+    "scripts": ["background.bundle.js"],
+    "service_worker": "background.bundle.js"
   },
   "content_scripts": [
     {
-      "matches": [
-        "<all_urls>"
-      ],
-      "js": [
-        "render-model.js",
-        "content.js"
-      ]
+      "matches": ["<all_urls>"],
+      "js": ["render-model.js", "content.js"]
     }
   ],
   "web_accessible_resources": [
-    "xun.css"
+    {
+      "resources": ["xun.css"],
+      "matches": ["<all_urls>"]
+    }
   ],
   "browser_specific_settings": {
     "gecko": {
