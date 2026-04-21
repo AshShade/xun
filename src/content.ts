@@ -346,7 +346,11 @@ function onInput(e: Event): void {
         functionalResults: r.results,
         selectedIndex: r.results.length > 0 ? 0 : -1, mode: "functional", ghost: "",
       });
-    }).catch((err: unknown) => { console.error("[xun:content] fn error:", err); });
+    }).catch((err: unknown) => {
+      // #IF_DEV
+      console.error("[xun:content] fn error:", err);
+      // #END_IF_DEV
+    });
     return;
   }
 

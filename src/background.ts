@@ -72,7 +72,11 @@ function pullRemoteConfig(force = false): void {
         chrome.storage.local.set({ config, syncLastModified }).then(() => { syncingFromRemote = false; });
       } catch {}
     });
-  }).catch((e) => { console.error("[xun:sync] pull error:", e); });
+  }).catch((e) => {
+    // #IF_DEV
+    console.error("[xun:sync] pull error:", e);
+    // #END_IF_DEV
+  });
 }
 
 function pushRemoteConfig(): void {
@@ -91,7 +95,11 @@ function pushRemoteConfig(): void {
       syncLastModified = (json as { updatedAt: string }).updatedAt;
       chrome.storage.local.set({ syncLastModified });
     }
-  }).catch((e) => { console.error("[xun:sync] push error:", e); });
+  }).catch((e) => {
+    // #IF_DEV
+    console.error("[xun:sync] push error:", e);
+    // #END_IF_DEV
+  });
 }
 
 // Cache layer — raw API data, keyed by exact URL
