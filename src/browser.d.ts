@@ -26,10 +26,10 @@ declare namespace chrome {
   }
 
   namespace tabs {
-    interface Tab { id?: number; windowId?: number; title?: string; url?: string }
+    interface Tab { id?: number; windowId?: number; title?: string; url?: string; index?: number }
     function query(queryInfo: Record<string, unknown>): Promise<Tab[]>;
     function update(tabId: number, updateProperties: { active?: boolean; url?: string }): Promise<Tab>;
-    function create(createProperties: { url: string }): Promise<Tab>;
+    function create(createProperties: { url: string; index?: number }): Promise<Tab>;
   }
 
   namespace windows {

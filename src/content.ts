@@ -294,7 +294,7 @@ function open(): void {
   render = createRenderer(overlay, handleResultAction, handleResultHover);
 
   const input = overlay.querySelector<HTMLInputElement>("#xun-input")!;
-  input.focus();
+  input.focus({ preventScroll: true });
   input.addEventListener("input", onInput);
   overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
   overlay.addEventListener("mousemove", () => {

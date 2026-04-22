@@ -164,7 +164,11 @@ chrome.runtime.onMessage.addListener((msg: Message, sender: chrome.runtime.Messa
       chrome.tabs.update(msg.tabId, { active: true });
       if (msg.windowId) chrome.windows.update(msg.windowId, { focused: true });
     } else if (msg.newTab) {
-      chrome.tabs.create({ url: msg.url });
+      const idx = sender.tab?.index !== undefined ? sender.tab.index + 1 : undefined;
+      const tab = chrome.tabs.create({ url: msg.url, index: idx });
+      if (sender.tab && (sender.tab as any).groupId > 0) {
+        tab.then(t => { if (t.id) (chrome.tabs as any).group({ tabIds: t.id, groupId: (sender.tab as any).groupId }); });
+      }
     } else if (sender.tab?.id) {
       chrome.tabs.update(sender.tab.id, { url: msg.url });
     }
