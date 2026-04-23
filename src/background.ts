@@ -15,6 +15,8 @@ declare const queryTabs: typeof import("./lib").queryTabs;
 declare const computeExpression: typeof import("./lib").computeExpression;
 declare const fuzzyMatch: typeof import("./lib").fuzzyMatch;
 declare const suggestGhost: typeof import("./lib").suggestGhost;
+declare const decayScore: typeof import("./lib").decayScore;
+declare const textMatch: typeof import("./lib").textMatch;
 
 import type { BookmarkEntry, Config, FnResponse, HistoryEntry, SearchResponse, TabEntry } from "./types";
 
@@ -193,6 +195,15 @@ function handleSearch(raw: string): SearchResponse {
   const history = !source || source === "history" ? queryHistory(historyCache, query) : [];
 
   const merged = mergeResults(tabs, bookmarks, history, plugin, query);
+  // #IF_DEV
+  for (let i = 0; i < Math.min(5, merged.length); i++) {
+    const r = merged[i]!;
+    const decay = r.visitCount != null ? decayScore(r.visitCount, r.lastVisitTime) : 0;
+    const text = textMatch(r.title, r.url, query);
+    const age = r.lastVisitTime ? Math.round((Date.now() - r.lastVisitTime) / 60000) : -1;
+    console.log(`[xun] #${i + 1} score=${r.score} decay=${decay} text=${text} visits=${r.visitCount ?? 0} age=${age}min ${r.type} ${r.title?.slice(0, 40)} ${r.url?.slice(0, 60)}`);
+  }
+  // #END_IF_DEV
   return { results: merged, hasPrefix, sourceColors: config.sourceColors, plugin, source };
 }
 
@@ -289,5 +300,14 @@ function handleSuggest(query: string): string {
   const entries: { url: string; visitCount: number }[] = [];
   for (const [, h] of historyCache) entries.push({ url: h.url, visitCount: h.visitCount });
   for (const b of bookmarkCache) entries.push({ url: b.url, visitCount: 0 });
-  return suggestGhost(query, entries);
+  const result = suggestGhost(query, entries);
+  // #IF_DEV
+  const q = query.toLowerCase();
+  const candidates = entries.filter(e => {
+    const lc = e.url.toLowerCase();
+    return lc.startsWith(q) || lc.replace(/^https?:\/\//, "").startsWith(q) || lc.replace(/^https?:\/\/(www\.)?/, "").startsWith(q);
+  }).sort((a, b) => b.visitCount - a.visitCount).slice(0, 5);
+  if (candidates.length) console.log(`[xun:suggest] q="${query}" → "${result?.slice(0, 40)}" top:`, candidates.map(c => `${c.visitCount}×${c.url.slice(0, 50)}`).join(" | "));
+  // #END_IF_DEV
+  return result;
 }

@@ -558,15 +558,18 @@ describe("suggestGhost", () => {
   });
 
   it("strips protocol for matching", () => {
-    expect(suggestGhost("github", entries)).toBe(".com/user/repo");
+    // both github URLs share github.com/user/ then diverge
+    expect(suggestGhost("github", entries)).toBe(".com/user/");
   });
 
   it("strips www for matching", () => {
+    // single match → full URL
     expect(suggestGhost("google", entries)).toBe(".com/search");
   });
 
-  it("picks highest visitCount", () => {
-    expect(suggestGhost("github.com/user/", entries)).toBe("repo");
+  it("falls back to empty when prefix exhausted", () => {
+    // github.com/user/ then r vs o → no common prefix → empty
+    expect(suggestGhost("github.com/user/", entries)).toBe("");
   });
 
   it("returns empty for no match", () => {
@@ -578,14 +581,58 @@ describe("suggestGhost", () => {
   });
 
   it("case insensitive", () => {
-    expect(suggestGhost("GitHub", entries)).toBe(".com/user/repo");
+    expect(suggestGhost("GitHub", entries)).toBe(".com/user/");
   });
 
-  it("bookmarks with visitCount 0 lose to history", () => {
+  it("no suggestion when candidates diverge immediately", () => {
     const mixed = [
       { url: "https://example.com/page", visitCount: 0 },
       { url: "https://example.com/better", visitCount: 3 },
     ];
-    expect(suggestGhost("example.com/", mixed)).toBe("better");
+    expect(suggestGhost("example.com/", mixed)).toBe("");
+  });
+
+  it("common prefix stops at divergence point", () => {
+    const yt = [
+      { url: "https://www.youtube.com/watch?v=aaa", visitCount: 20 },
+      { url: "https://www.youtube.com/watch?v=bbb", visitCount: 15 },
+      { url: "https://www.youtube.com/shorts/ccc", visitCount: 10 },
+    ];
+    // all share youtube.com/ then watch vs shorts diverge
+    expect(suggestGhost("you", yt)).toBe("tube.com/");
+  });
+
+  it("single candidate suggests full remaining URL", () => {
+    expect(suggestGhost("example", [{ url: "https://example.com/page", visitCount: 1 }])).toBe(".com/page");
+  });
+
+  it("progressive narrowing works", () => {
+    const entries = [
+      { url: "https://code.test.com/reviews/CR-111", visitCount: 30 },
+      { url: "https://code.test.com/reviews/CR-222", visitCount: 20 },
+      { url: "https://code.test.com/packages/Foo", visitCount: 15 },
+    ];
+    // Step 1: type "code." → common prefix is "code.test.com/"
+    expect(suggestGhost("code.", entries)).toBe("test.com/");
+    // Step 2: accept, now query is "code.test.com/" → diverge at r vs p → empty
+    expect(suggestGhost("code.test.com/", entries)).toBe("");
+    // Step 3: type "r" → 2 review URLs share "reviews/CR-"
+    expect(suggestGhost("code.test.com/r", entries)).toBe("eviews/cr-");
+    // Step 4: accept, type "1" → single candidate
+    expect(suggestGhost("code.test.com/reviews/cr-1", entries)).toBe("11");
+  });
+
+  it("handles protocol in query", () => {
+    expect(suggestGhost("https://github", [
+      { url: "https://github.com/user/repo", visitCount: 10 },
+    ])).toBe(".com/user/repo");
+  });
+
+  it("duplicate URLs do not affect result", () => {
+    const dupes = [
+      { url: "https://example.com/page", visitCount: 5 },
+      { url: "https://example.com/page", visitCount: 3 },
+    ];
+    expect(suggestGhost("example", dupes)).toBe(".com/page");
   });
 });

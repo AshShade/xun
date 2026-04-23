@@ -68,7 +68,7 @@ export function fuzzyMatch(str: string, query: string): number {
   return score;
 }
 
-function textMatch(title: string, url: string, query: string): number {
+export function textMatch(title: string, url: string, query: string): number {
   return Math.max(fuzzyMatch(title, query), fuzzyMatch(url, query));
 }
 
@@ -207,22 +207,20 @@ export function looksLikeUrl(s: string): boolean {
 export function suggestGhost(query: string, entries: { url: string; visitCount: number }[]): string {
   if (query.length < 2) return "";
   const q = query.toLowerCase();
-  let best = "";
-  let bestVisits = -1;
-  for (const { url, visitCount } of entries) {
+  const candidates: string[] = [];
+  for (const { url } of entries) {
     const lc = url.toLowerCase();
-    for (const v of [lc, lc.replace(/^https?:\/\//, ""), lc.replace(/^https?:\/\/(www\.)?/, "")]) {
-      if (v.startsWith(q) && visitCount > bestVisits) { best = url; bestVisits = visitCount; break; }
-    }
+    const match = [lc, lc.replace(/^https?:\/\//, ""), lc.replace(/^https?:\/\/(www\.)?/, "")].find(f => f.startsWith(q));
+    if (match) candidates.push(match);
   }
-  if (!best) return "";
-  const lc = best.toLowerCase();
-  /* v8 ignore next */ if (lc.startsWith(q)) return best.slice(query.length);
-  const bare = lc.replace(/^https?:\/\//, "");
-  /* v8 ignore next */ if (bare.startsWith(q)) return best.replace(/^https?:\/\//, "").slice(query.length);
-  const noWww = bare.replace(/^www\./, "");
-  /* v8 ignore next */ if (noWww.startsWith(q)) return best.replace(/^https?:\/\/(www\.)?/, "").slice(query.length);
-  /* v8 ignore next */ return "";
+  if (!candidates.length) return "";
+  let prefix = q;
+  for (let i = q.length; ; i++) {
+    const ch = candidates[0]![i];
+    if (ch === undefined || !candidates.every(c => c[i] === ch)) break;
+    prefix += ch;
+  }
+  return prefix.length > q.length ? prefix.slice(query.length) : "";
 }
 
 export function computeExpression(expr: string): string | null {
