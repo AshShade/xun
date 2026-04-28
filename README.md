@@ -6,9 +6,9 @@ Spotlight-style search for your browser — search open tabs, bookmarks, and his
 
 ## Install
 
-**Firefox**: [addons.mozilla.org](https://addons.mozilla.org/) — search "Xun" or install by extension ID `xun@AshShade`.
+**Chrome**: [Chrome Web Store](https://chromewebstore.google.com/detail/xun-%E5%AF%BB/igphlagbmekmebpgohipibfbhjcgliej)
 
-**Chrome**: [Chrome Web Store](https://chromewebstore.google.com/) — search "Xun".
+**Firefox**: [Firefox Add-ons](https://addons.mozilla.org/en-CA/firefox/addon/xun-%E5%AF%BB)
 
 **From source**:
 1. Clone the repo and run `npm install && npm run build`
@@ -18,11 +18,12 @@ Spotlight-style search for your browser — search open tabs, bookmarks, and his
 ## Usage
 
 - `Ctrl+K` (`Cmd+K` on Mac) to open — configurable via toolbar icon
+- Opens automatically on new tabs (Chrome) — replaces the default new tab page
 - Type to search across open tabs, bookmarks, and history
 - `↑`/`↓` to navigate, `Enter` to go, `Esc` to close
 - `Cmd+Enter` / `Ctrl+Enter` to open in a new tab
 - Type a URL directly (e.g. `github.com`) and press `Enter` to navigate
-- Ghost text auto-completes from your top matching URL — press `Tab` or `→` to accept
+- Ghost text auto-completes the common prefix of all matching URLs — press `Tab` or `→` to accept, then keep typing to narrow down
 
 ## Prefix Filters
 
