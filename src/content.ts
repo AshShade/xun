@@ -5,6 +5,12 @@ import type { SearchResponse, Shortcut } from "./types";
 import type { FnResponse } from "./types";
 import type { Mode, State, TextSegment, ResultItemModel, PluginLabelModel, GhostModel, PreviewModel, UIModel } from "./types";
 const VERSION = "__VERSION__";
+const isNewTab = location.pathname.endsWith("newtab.html");
+
+function clearInput(): void {
+  const inp = overlay?.querySelector<HTMLInputElement>("#xun-input");
+  if (inp) { inp.value = ""; onInput({ target: inp } as unknown as Event); }
+}
 
 // render-model.ts functions loaded as globals via manifest scripts array
 declare const computeUI: (s: State) => UIModel;
@@ -272,6 +278,8 @@ function open(): void {
 
   overlay = document.createElement("div");
   overlay.id = "xun-overlay";
+  overlay.style.visibility = "hidden";
+  link.onload = () => { if (overlay) { overlay.style.visibility = ""; overlay.querySelector<HTMLInputElement>("#xun-input")?.focus({ preventScroll: true }); } };
   overlay.innerHTML = `
     <div id="xun-modal">
       <div id="xun-input-row">
@@ -296,7 +304,7 @@ function open(): void {
   const input = overlay.querySelector<HTMLInputElement>("#xun-input")!;
   input.focus({ preventScroll: true });
   input.addEventListener("input", onInput);
-  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) { if (isNewTab) clearInput(); else close(); } });
   overlay.addEventListener("mousemove", () => {
     overlay!.querySelector<HTMLDivElement>("#xun-results")!.style.pointerEvents = "auto";
   });
@@ -407,7 +415,11 @@ function stopEvent(e: Event): void { e.stopPropagation(); }
 
 function onKeydown(e: KeyboardEvent): void {
   e.stopPropagation();
-  if (e.key === "Escape") { close(); e.preventDefault(); return; }
+  if (e.key === "Escape") {
+    if (isNewTab) clearInput();
+    else close();
+    e.preventDefault(); return;
+  }
   if (state.ghost && (e.key === "Tab" || e.key === "ArrowRight")) {
     const input = overlay!.querySelector<HTMLInputElement>("#xun-input")!;
     if (input.selectionStart === input.value.length) {
@@ -439,3 +451,6 @@ function onKeydown(e: KeyboardEvent): void {
     }
   }
 }
+
+// Auto-open on new tab page
+if (isNewTab) open();

@@ -16,6 +16,9 @@
     "96": "icons/xun-96.png",
     "128": "icons/xun-128.png"
   },
+  "chrome_url_overrides": {
+    "newtab": "newtab.html"
+  },
   "action": {
     "default_icon": {
       "16": "icons/xun-16.png",
