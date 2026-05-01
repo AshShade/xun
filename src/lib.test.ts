@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { globMatch, matchesPlugin, parseQuery, decayScore, TAB_BONUS, BOOKMARK_BONUS, fuzzyMatch, mergeResults, urlKey, validateConfig, mergeHistoryCache, queryHistory, queryBookmarks, queryTabs, looksLikeUrl, computeExpression, suggestGhost } from "./lib";
+import { globMatch, matchesPlugin, parseQuery, decayScore, TAB_BONUS, BOOKMARK_BONUS, fuzzyMatch, textMatch, mergeResults, urlKey, validateConfig, mergeHistoryCache, queryHistory, queryBookmarks, queryTabs, looksLikeUrl, computeExpression, suggestGhost } from "./lib";
 import { truncateUrl, buildResultRow } from "./dom";
 import type { Config, HistoryEntry, PatternPlugin, SearchPlugin, SearchResult } from "./types";
 
@@ -458,6 +458,18 @@ describe("fuzzyMatch", () => {
   });
   it("is case insensitive", () => {
     expect(fuzzyMatch("GitHub", "github")).toBeGreaterThan(0);
+  });
+});
+
+describe("textMatch", () => {
+  it("matches terms split across title and url", () => {
+    expect(textMatch("hello page", "https://example.com/world", "hello world")).toBeGreaterThan(0);
+  });
+  it("still matches when all terms are in title only", () => {
+    expect(textMatch("hello world page", "https://example.com", "hello world")).toBeGreaterThan(0);
+  });
+  it("returns 0 when a term is in neither", () => {
+    expect(textMatch("hello page", "https://example.com", "hello world")).toBe(0);
   });
 });
 

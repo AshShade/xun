@@ -69,7 +69,7 @@ export function fuzzyMatch(str: string, query: string): number {
 }
 
 export function textMatch(title: string, url: string, query: string): number {
-  return Math.max(fuzzyMatch(title, query), fuzzyMatch(url, query));
+  return Math.max(fuzzyMatch(title, query), fuzzyMatch(url, query), fuzzyMatch(title + " " + url, query));
 }
 
 const DEFAULT_CONFIG: Config = {
