@@ -304,7 +304,7 @@ function open(): void {
   const input = overlay.querySelector<HTMLInputElement>("#xun-input")!;
   input.focus({ preventScroll: true });
   input.addEventListener("input", onInput);
-  overlay.addEventListener("click", (e) => { if (e.target === overlay) { if (isNewTab) clearInput(); else close(); } });
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
   overlay.addEventListener("mousemove", () => {
     overlay!.querySelector<HTMLDivElement>("#xun-results")!.style.pointerEvents = "auto";
   });
@@ -314,6 +314,7 @@ function open(): void {
 }
 
 function close(): void {
+  if (isNewTab) { clearInput(); return; }
   if (!host) return;
   host.remove();
   host = null;
@@ -415,11 +416,7 @@ function stopEvent(e: Event): void { e.stopPropagation(); }
 
 function onKeydown(e: KeyboardEvent): void {
   e.stopPropagation();
-  if (e.key === "Escape") {
-    if (isNewTab) clearInput();
-    else close();
-    e.preventDefault(); return;
-  }
+  if (e.key === "Escape") { close(); e.preventDefault(); return; }
   if (state.ghost && (e.key === "Tab" || e.key === "ArrowRight")) {
     const input = overlay!.querySelector<HTMLInputElement>("#xun-input")!;
     if (input.selectionStart === input.value.length) {
