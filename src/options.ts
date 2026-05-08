@@ -8,7 +8,6 @@ const shortcutInput = document.getElementById("shortcut") as HTMLInputElement;
 const prefixHistory = document.getElementById("prefix-history") as HTMLInputElement;
 const prefixTabs = document.getElementById("prefix-tabs") as HTMLInputElement;
 const prefixBookmarks = document.getElementById("prefix-bookmarks") as HTMLInputElement;
-const searchEngine = document.getElementById("search-engine") as HTMLInputElement;
 const categoriesEl = document.getElementById("categories")!;
 const addCatBtn = document.getElementById("add-cat")!;
 const builtinRows = document.querySelectorAll<HTMLDivElement>(".prefix-row[data-source]");
@@ -106,10 +105,10 @@ function saveConfig(): void {
   const plugins: Plugin[] = [...categoriesEl.querySelectorAll<HTMLDivElement>(".cat-row")].map((row) => {
     const name = row.querySelector<HTMLInputElement>("[name=name]")!.value;
     const prefix = row.querySelector<HTMLInputElement>("[name=prefix]")!.value.trim();
-    const pluginType = (row.dataset["pluginType"] ?? "pattern") as "pattern" | "search";
+    const pluginType = (row.dataset["pluginType"] ?? "filter") as "filter" | "template";
     const color = row.dataset["color"] ?? "";
 
-    if (pluginType === "search") {
+    if (pluginType === "template") {
       return { name, prefix, pluginType, url: row.querySelector<HTMLInputElement>("[name=url]")!.value, color };
     }
     return {
@@ -125,7 +124,6 @@ function saveConfig(): void {
   const config: Config = {
     prefixes: { history: prefixHistory.value.trim(), tabs: prefixTabs.value.trim(), bookmarks: prefixBookmarks.value.trim() },
     sourceColors,
-    searchEngine: searchEngine.value || DEFAULT_CONFIG.searchEngine,
     plugins,
   };
   chrome.storage.local.set({ config }).then(flash);
@@ -133,20 +131,20 @@ function saveConfig(): void {
 
 function addCategoryRow(cat: Partial<Plugin> = {}): void {
   const color = cat.color || nextAvailableColor();
-  const pluginType = cat.pluginType || "pattern";
+  const pluginType = cat.pluginType || "filter";
   const row = document.createElement("div");
   row.className = "cat-row";
   row.dataset["color"] = color;
   row.dataset["pluginType"] = pluginType;
 
-  const valueField = pluginType === "search"
-    ? `<input name="url" type="text" placeholder="https://example.com/search?q=%s" value="${"url" in cat ? cat.url : ""}" />`
+  const valueField = pluginType === "template"
+    ? `<input name="url" type="text" placeholder="https://example.com/search?q={}" value="${"url" in cat ? cat.url : ""}" />`
     : `<input name="patterns" type="text" placeholder="*.example.com" value="${"patterns" in cat ? (cat.patterns ?? []).join(", ") : ""}" />`;
 
   row.innerHTML = `
     <input name="prefix" type="text" placeholder="x" value="${cat.prefix || ""}" />
     <input name="name" type="text" placeholder="Name" value="${cat.name || ""}" />
-    <select name="pluginType"><option value="pattern"${pluginType === "pattern" ? " selected" : ""}>Pattern</option><option value="search"${pluginType === "search" ? " selected" : ""}>Search</option></select>
+    <select name="pluginType"><option value="filter"${pluginType === "filter" ? " selected" : ""}>Filter</option><option value="template"${pluginType === "template" ? " selected" : ""}>Template</option></select>
     ${valueField}
     <div class="color-picker"></div>
     <button class="cat-remove">×</button>
@@ -158,7 +156,7 @@ function addCategoryRow(cat: Partial<Plugin> = {}): void {
     const old = row.querySelector<HTMLInputElement>("[name=patterns],[name=url]")!;
     const replacement = document.createElement("input");
     replacement.type = "text";
-    if (newType === "search") { replacement.name = "url"; replacement.placeholder = "https://example.com/search?q=%s"; }
+    if (newType === "template") { replacement.name = "url"; replacement.placeholder = "https://example.com/search?q={}"; }
     else { replacement.name = "patterns"; replacement.placeholder = "*.example.com"; }
     replacement.addEventListener("input", saveConfig);
     old.replaceWith(replacement);
@@ -178,7 +176,6 @@ chrome.storage.local.get(["shortcut", "config"]).then(({ shortcut, config }: { s
   prefixHistory.value = c.prefixes["history"] ?? "h";
   prefixTabs.value = c.prefixes["tabs"] ?? "t";
   prefixBookmarks.value = c.prefixes["bookmarks"] ?? "b";
-  searchEngine.value = c.searchEngine;
   builtinRows.forEach((row) => {
     const src = row.dataset["source"] ?? "";
     if (c.sourceColors[src]) row.dataset["color"] = c.sourceColors[src];
@@ -195,7 +192,7 @@ shortcutInput.addEventListener("keydown", (e: KeyboardEvent) => {
   chrome.storage.local.set({ shortcut: s }).then(flash);
 });
 
-[prefixHistory, prefixTabs, prefixBookmarks, searchEngine].forEach((el) => el.addEventListener("input", saveConfig));
+[prefixHistory, prefixTabs, prefixBookmarks].forEach((el) => el.addEventListener("input", saveConfig));
 addCatBtn.addEventListener("click", () => addCategoryRow());
 
 document.addEventListener("click", () => {

@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "Xun (寻)",
-  "version": "0.6.2",
-  "description": "Spotlight-style search for browser history, bookmarks, and open tabs",
-  "permissions": ["history", "bookmarks", "tabs", "storage", "alarms"],
+  "version": "0.7.0",
+  "description": "Spotlight-style launcher for browser history, bookmarks, and open tabs",
+  "permissions": ["history", "bookmarks", "tabs", "storage", "alarms", "search"],
   "host_permissions": [],
   "options_ui": {
     "page": "options.html",

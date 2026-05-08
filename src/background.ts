@@ -131,7 +131,8 @@ interface GetConfigMessage { type: "get-config" }
 interface FnMessage { type: "fn"; query: string }
 interface SuggestMessage { type: "suggest"; query: string }
 interface ForceSyncMessage { type: "force-sync"; syncUrl?: string }
-type Message = NavigateMessage | SearchMessage | DeepSearchMessage | RefreshMessage | GetConfigMessage | FnMessage | SuggestMessage | ForceSyncMessage;
+interface DefaultSearchMessage { type: "default-search"; query: string; newTab?: boolean }
+type Message = NavigateMessage | SearchMessage | DeepSearchMessage | RefreshMessage | GetConfigMessage | FnMessage | SuggestMessage | ForceSyncMessage | DefaultSearchMessage;
 
 chrome.runtime.onMessage.addListener((msg: Message, sender: chrome.runtime.MessageSender, sendResponse: (response: unknown) => void): true | void => {
   if (msg.type === "fn") {
@@ -161,6 +162,11 @@ chrome.runtime.onMessage.addListener((msg: Message, sender: chrome.runtime.Messa
     sendResponse(handleSuggest(msg.query));
     return true;
   }
+  if (msg.type === "default-search") {
+    const disposition = msg.newTab ? "NEW_TAB" : "CURRENT_TAB";
+    (chrome as any).search.query({ text: msg.query, disposition });
+    return;
+  }
   if (msg.type === "navigate") {
     if (msg.tabId && !msg.newTab) {
       chrome.tabs.update(msg.tabId, { active: true });
@@ -185,7 +191,7 @@ function handleSearch(raw: string): SearchResponse {
     return { results: [], hasPrefix, sourceColors: config.sourceColors, plugin, source };
   }
 
-  if (plugin && plugin.pluginType === "search") {
+  if (plugin && plugin.pluginType === "template") {
     return { results: [], hasPrefix, sourceColors: config.sourceColors, plugin, source };
   }
 

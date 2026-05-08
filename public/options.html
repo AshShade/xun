@@ -7,7 +7,6 @@
   input, select { background: #313244; border: 1px solid #45475a; border-radius: 6px; color: #cdd6f4; padding: 6px 10px; font-size: 13px; box-sizing: border-box; }
   input:focus { border-color: #cba6f7; outline: none; }
   #shortcut { width: 100%; text-align: center; cursor: pointer; padding: 8px 12px; font-size: 14px; }
-  #search-engine { width: 100%; }
   .hint { font-size: 11px; color: #585b70; margin-top: 6px; }
   #status { font-size: 12px; color: #a6e3a1; margin-top: 10px; opacity: 0; transition: opacity 0.3s; }
   .section { margin-top: 16px; }
@@ -51,13 +50,7 @@
     <label>Plugins</label>
     <div id="categories"></div>
     <button id="add-cat">+ Add plugin</button>
-    <div class="hint">Pattern: filter by URL glob. Search: redirect to a URL with %s query.</div>
-  </div>
-
-  <div class="section">
-    <label>Search engine</label>
-    <input id="search-engine" placeholder="https://www.google.com/search?q=%s" />
-    <div class="hint">Use %s as placeholder for the query</div>
+    <div class="hint">Filter: narrow results by URL glob. Template: open a URL with {} as query placeholder.</div>
   </div>
 
   <div id="status">Saved</div>

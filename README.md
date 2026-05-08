@@ -1,6 +1,6 @@
 # Xun (寻)
 
-Spotlight-style search for your browser — search open tabs, bookmarks, and history from a single floating bar. Works on Firefox and Chrome.
+Spotlight-style launcher for your browser — quickly navigate to open tabs, bookmarks, and history from a single floating bar. Works on Firefox and Chrome.
 
 寻 means "to seek" in Chinese. Also a nod to 巽 (the Wind trigram) — penetrates everywhere, finds everything.
 
@@ -19,7 +19,7 @@ Spotlight-style search for your browser — search open tabs, bookmarks, and his
 
 - `Ctrl+K` (`Cmd+K` on Mac) to open — configurable via toolbar icon
 - Opens automatically on new tabs (Chrome) — replaces the default new tab page
-- Type to search across open tabs, bookmarks, and history
+- Type to find open tabs, bookmarks, and history
 - `↑`/`↓` to navigate, `Enter` to go, `Esc` to close
 - `Cmd+Enter` / `Ctrl+Enter` to open in a new tab
 - Type a URL directly (e.g. `github.com`) and press `Enter` to navigate
@@ -37,16 +37,16 @@ Type a prefix followed by a space to narrow results. A colored label appears whe
 
 ## Plugins
 
-### Pattern Plugin
-Filters results by URL glob pattern.
+### Filter Plugin
+Narrows results by URL glob pattern.
 ```json
-{ "name": "Wiki", "prefix": "w", "pluginType": "pattern", "patterns": ["docs.example.com/**"], "color": "#f38ba8" }
+{ "name": "Wiki", "prefix": "w", "pluginType": "filter", "patterns": ["docs.example.com/**"], "color": "#f38ba8" }
 ```
 
-### Search Plugin
-Redirects to a URL with `%s` replaced by your query.
+### Template Plugin
+Opens a parameterized URL with `{}` replaced by your query.
 ```json
-{ "name": "CodeSearch", "prefix": "cs", "pluginType": "search", "url": "https://grep.app/search?q=%s", "color": "#fab387" }
+{ "name": "CodeSearch", "prefix": "cs", "pluginType": "template", "url": "https://grep.app/search?q={}", "color": "#fab387" }
 ```
 
 ### Functional Plugins
@@ -91,12 +91,12 @@ Results are scored by **frecency + fuzzy match quality**.
 
 | File | Role |
 |------|------|
-| `background.ts` | Search engine — in-memory caches, query processing, config sync, functional plugins |
+| `background.ts` | Core engine — in-memory caches, query processing, config sync, functional plugins |
 | `content.ts` | UI — Shadow DOM, single-renderer architecture (`State → computeUI → render`) |
 | `render-model.ts` | Pure compute — `computeUI(state)` produces full UI model from state |
 | `lib.ts` | Pure functions — scoring, cache builders, config validation |
 | `dom.ts` | DOM helpers — highlight, color, truncate |
-| `options.ts` | Settings popup — shortcut, prefixes, plugins, search engine |
+| `options.ts` | Settings popup — shortcut, prefixes, plugins |
 | `editor.ts` | Full-tab JSON config editor with docs panel and sync UI |
 
 ## Development

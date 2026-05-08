@@ -6,28 +6,27 @@ export interface Shortcut {
   key: string;
 }
 
-export interface PatternPlugin {
+export interface FilterPlugin {
   name: string;
   prefix: string;
-  pluginType: "pattern";
+  pluginType: "filter";
   patterns: string[];
   color: string;
 }
 
-export interface SearchPlugin {
+export interface TemplatePlugin {
   name: string;
   prefix: string;
-  pluginType: "search";
+  pluginType: "template";
   url: string;
   color: string;
 }
 
-export type Plugin = PatternPlugin | SearchPlugin;
+export type Plugin = FilterPlugin | TemplatePlugin;
 
 export interface Config {
   prefixes: Record<string, string>;
   sourceColors: Record<string, string>;
-  searchEngine: string;
   plugins: Plugin[];
 }
 

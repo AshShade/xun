@@ -173,7 +173,6 @@ let host: HTMLDivElement | null = null;
 let shadow: ShadowRoot | null = null;
 let overlay: HTMLDivElement | null = null;
 let deepTimer: ReturnType<typeof setTimeout> | null = null;
-let searchEngine = "https://www.google.com/search?q=%s";
 
 function looksLikeUrl(s: string): boolean {
   if (s.includes(" ")) return false;
@@ -263,10 +262,7 @@ function toggle(): void { host ? close() : open(); }
 
 function open(): void {
   chrome.runtime.sendMessage({ type: "refresh-cache" });
-  chrome.runtime.sendMessage({ type: "get-config" }).then((raw: unknown) => {
-    const c = raw as { searchEngine?: string };
-    if (c.searchEngine) searchEngine = c.searchEngine;
-  });
+  chrome.runtime.sendMessage({ type: "get-config" });
   host = document.createElement("div");
   host.id = "xun-host";
   shadow = host.attachShadow({ mode: "open" });
@@ -286,7 +282,7 @@ function open(): void {
         <span id="xun-icon">寻</span>
         <div id="xun-input-wrap">
           <div id="xun-ghost-layer"><span id="xun-ghost-mirror"></span><span id="xun-ghost"></span></div>
-          <input id="xun-input" type="text" placeholder="Search tabs, bookmarks, history..." autocomplete="off" spellcheck="false" />
+          <input id="xun-input" type="text" placeholder="Tabs, bookmarks, history..." autocomplete="off" spellcheck="false" />
         </div>
         <span id="xun-plugin-label"></span>
       </div>
@@ -438,13 +434,17 @@ function onKeydown(e: KeyboardEvent): void {
     const newTab = isMac ? e.metaKey : e.ctrlKey;
     if (state.selectedIndex >= 0) {
       handleResultAction(state.selectedIndex, newTab);
-    } else if (state.activePlugin?.pluginType === "search" && state.query) {
+    } else if (state.activePlugin?.pluginType === "template" && state.query) {
       const q = state.query.trim().split(" ").slice(1).join(" ").trim();
-      if (q) navigate({ type: "history", title: "", url: (state.activePlugin as { url: string }).url.replace("%s", encodeURIComponent(q)), score: 0 }, newTab);
+      if (q) navigate({ type: "history", title: "", url: (state.activePlugin as { url: string }).url.replace("{}", encodeURIComponent(q)), score: 0 }, newTab);
     } else if (state.query) {
       const q = state.query.trim();
-      const url = looksLikeUrl(q) ? (q.includes("://") ? q : "https://" + q) : searchEngine.replace("%s", encodeURIComponent(q));
-      navigate({ type: "history", title: "", url, score: 0 }, newTab);
+      if (looksLikeUrl(q)) {
+        navigate({ type: "history", title: "", url: q.includes("://") ? q : "https://" + q, score: 0 }, newTab);
+      } else {
+        chrome.runtime.sendMessage({ type: "default-search", query: q, newTab });
+        close();
+      }
     }
   }
 }

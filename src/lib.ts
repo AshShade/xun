@@ -75,7 +75,6 @@ export function textMatch(title: string, url: string, query: string): number {
 const DEFAULT_CONFIG: Config = {
   prefixes: { history: "h", tabs: "t", bookmarks: "b" },
   sourceColors: { tabs: "#89b4fa", bookmarks: "#f9e2af", history: "#a6e3a1" },
-  searchEngine: "https://www.google.com/search?q=%s",
   plugins: [],
 };
 
@@ -91,20 +90,16 @@ export function validateConfig(raw: unknown): Config {
     ? { ...DEFAULT_CONFIG.sourceColors, ...(obj["sourceColors"] as Record<string, string>) }
     : { ...DEFAULT_CONFIG.sourceColors };
 
-  const searchEngine = typeof obj["searchEngine"] === "string" && obj["searchEngine"]
-    ? obj["searchEngine"]
-    : DEFAULT_CONFIG.searchEngine;
-
-  const rawPlugins = Array.isArray(obj["plugins"]) ? obj["plugins"] : (Array.isArray(obj["categories"]) ? obj["categories"] : []);
+  const rawPlugins = Array.isArray(obj["plugins"]) ? obj["plugins"] : [];
   const plugins: Plugin[] = rawPlugins.filter((p: unknown): p is Plugin => {
     if (!p || typeof p !== "object") return false;
     const pl = p as Record<string, unknown>;
     return !!pl["name"] && typeof pl["name"] === "string" && !!pl["prefix"] && typeof pl["prefix"] === "string"
       && !String(pl["prefix"]).startsWith("/")
-      && (pl["pluginType"] === "pattern" || pl["pluginType"] === "search");
+      && (pl["pluginType"] === "filter" || pl["pluginType"] === "template");
   });
 
-  return { prefixes, sourceColors, searchEngine, plugins };
+  return { prefixes, sourceColors, plugins };
 }
 
 export { DEFAULT_CONFIG };
@@ -173,14 +168,14 @@ export function mergeResults(
   plugin: Plugin | null,
   query: string | null,
 ): SearchResult[] {
-  const isPatternPlugin = plugin !== null && plugin.pluginType === "pattern";
+  const isFilterPlugin = plugin !== null && plugin.pluginType === "filter";
   const seen = new Map<string, { result: SearchResult; hasTab: boolean; hasBookmark: boolean; hasHistory: boolean }>();
   const merged: SearchResult[] = [];
   const q = query ? query.toLowerCase() : null;
 
   for (const item of [...tabResults, ...bookmarkResults, ...historyResults]) {
     if (plugin && !matchesPlugin(item.url, plugin)) continue;
-    if (isPatternPlugin && q && !fuzzyMatch(item.title, q) && !fuzzyMatch(item.url, q)) continue;
+    if (isFilterPlugin && q && !fuzzyMatch(item.title, q) && !fuzzyMatch(item.url, q)) continue;
     const key = urlKey(item.url);
     const entry = seen.get(key);
     if (entry) {
