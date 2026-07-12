@@ -32,6 +32,9 @@ export const expect = test.expect;
 // Helper: open Xun overlay on a page via keyboard shortcut
 export async function openXun(page: import("@playwright/test").Page) {
   const isMac = process.platform === "darwin";
+  // Ensure the window has OS focus so the overlay input's focus() registers in
+  // activeElement — headless CI runners otherwise leave the window unfocused.
+  await page.bringToFront();
   await page.keyboard.press(isMac ? "Meta+k" : "Control+k");
   // Wait for shadow DOM overlay to appear
   await page.waitForFunction(() => {
