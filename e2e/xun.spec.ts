@@ -6,10 +6,10 @@ test.describe("Core Launch", () => {
     const page = await context.newPage();
     await page.goto("https://example.com");
     await openXun(page);
-    const focused = await page.evaluate(() => {
-      const host = document.getElementById("xun-host")!;
-      return host.shadowRoot!.activeElement?.id === "xun-input";
-    });
+    const focused = await page.waitForFunction(() => {
+      const host = document.getElementById("xun-host");
+      return host?.shadowRoot?.activeElement?.id === "xun-input";
+    }, undefined, { timeout: 3000 }).then(() => true).catch(() => false);
     expect(focused).toBe(true);
   });
 
