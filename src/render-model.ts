@@ -1,9 +1,22 @@
 // Layer 2: Pure compute functions — State → Render Data Models
 // No DOM, no side effects, fully testable.
 
-import type { State, TextSegment, ResultItemModel, PluginLabelModel, GhostModel, PreviewModel, UIModel } from "./types";
+import type { State, Mode, TextSegment, ResultItemModel, PluginLabelModel, GhostModel, PreviewModel, UIModel } from "./types";
 
 // --- Shared pure helpers ---
+
+export function looksLikeUrl(s: string): boolean {
+  if (s.includes(" ")) return false;
+  if (/^https?:\/\//.test(s)) return true;
+  if (/^\d{1,3}(\.\d{1,3}){3}(\/|:|$)/.test(s)) return true;
+  return /^[^\s]+\.[a-z]{2,}(\/|$)/i.test(s);
+}
+
+export function computeMode(s: State): Mode {
+  if (s.functionalListing || s.functionalPlugin) return "functional";
+  if (s.activePlugin) return "plugin";
+  return "normal";
+}
 
 export function hexToRgba(hex: string, alpha: number): string {
   const r = parseInt(hex.slice(1, 3), 16);

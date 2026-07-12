@@ -1,5 +1,4 @@
-declare const DEFAULT_CONFIG: typeof import("./lib").DEFAULT_CONFIG;
-
+import { DEFAULT_CONFIG } from "./lib";
 import type { Config, Shortcut } from "./types";
 
 const editor = document.getElementById("editor") as HTMLTextAreaElement;

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Xun (寻)",
-  "version": "0.7.0",
+  "version": "1.0.0",
   "description": "Spotlight-style launcher for browser history, bookmarks, and open tabs",
   "permissions": ["history", "bookmarks", "tabs", "storage", "alarms", "search"],
   "host_permissions": [],
@@ -29,13 +29,13 @@
     "default_title": "Xun (寻) Settings"
   },
   "background": {
-    "scripts": ["background.bundle.js"],
-    "service_worker": "background.bundle.js"
+    "scripts": ["background.js"],
+    "service_worker": "background.js"
   },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["render-model.js", "content.js"]
+      "js": ["content.js"]
     }
   ],
   "web_accessible_resources": [

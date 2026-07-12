@@ -1,4 +1,4 @@
-import type { BookmarkEntry, Config, HistoryEntry, ParsedQuery, Plugin, SearchResult, TabEntry } from "./types";
+import type { BookmarkEntry, BrowserDataPort, CacheSnapshot, Config, HistoryEntry, ParsedQuery, Plugin, RawBookmarkItem, RawTabItem, SearchResult, TabEntry } from "./types";
 
 export function globMatch(str: string, pattern: string): boolean {
   if (!pattern.includes("/")) pattern += "/**";
@@ -39,15 +39,26 @@ export function parseQuery(raw: string, config: Config): ParsedQuery {
   return { query: raw, source: null, plugin: null };
 }
 
+// Frecency decay: score = log2(visits+1) * e^(-RATE * sqrt(hours)) * SCALE
+const DECAY_RATE = 0.3;
+const DECAY_SCALE = 150;
+const MS_PER_HOUR = 1000 * 60 * 60;
+
 export function decayScore(visitCount: number | null | undefined, lastVisitTime: number | null | undefined): number {
   const v = Math.log2((visitCount ?? 0) + 1);
   if (!lastVisitTime || v === 0) return 0;
-  const hours = Math.max(0, (Date.now() - lastVisitTime) / (1000 * 60 * 60));
-  return Math.round(v * Math.exp(-0.3 * Math.sqrt(hours)) * 150);
+  const hours = Math.max(0, (Date.now() - lastVisitTime) / MS_PER_HOUR);
+  return Math.round(v * Math.exp(-DECAY_RATE * Math.sqrt(hours)) * DECAY_SCALE);
 }
 
 export const TAB_BONUS = 300;
 export const BOOKMARK_BONUS = 50;
+
+// Fuzzy match scoring weights
+const TERM_LENGTH_WEIGHT = 2;
+const WORD_BOUNDARY_BONUS = 3;
+const NEAR_EXACT_BONUS = 5;
+const NEAR_EXACT_SLACK = 3;
 
 const BOUNDARY = /[/\s.\-_]/;
 function isBoundary(s: string, i: number): boolean { return i === 0 || BOUNDARY.test(s[i - 1]!); }
@@ -61,9 +72,9 @@ export function fuzzyMatch(str: string, query: string): number {
   for (const term of terms) {
     const idx = s.indexOf(term);
     if (idx < 0) return 0;
-    score += term.length * 2;
-    if (isBoundary(s, idx)) score += 3;
-    if (s.length - term.length < 3) score += 5; // near-exact match bonus
+    score += term.length * TERM_LENGTH_WEIGHT;
+    if (isBoundary(s, idx)) score += WORD_BOUNDARY_BONUS;
+    if (s.length - term.length < NEAR_EXACT_SLACK) score += NEAR_EXACT_BONUS;
   }
   return score;
 }
@@ -72,7 +83,10 @@ export function textMatch(title: string, url: string, query: string): number {
   return Math.max(fuzzyMatch(title, query), fuzzyMatch(url, query), fuzzyMatch(title + " " + url, query));
 }
 
+export const CONFIG_SCHEMA_VERSION = 1;
+
 const DEFAULT_CONFIG: Config = {
+  schemaVersion: CONFIG_SCHEMA_VERSION,
   prefixes: { history: "h", tabs: "t", bookmarks: "b" },
   sourceColors: { tabs: "#89b4fa", bookmarks: "#f9e2af", history: "#a6e3a1" },
   plugins: [],
@@ -99,7 +113,7 @@ export function validateConfig(raw: unknown): Config {
       && (pl["pluginType"] === "filter" || pl["pluginType"] === "template");
   });
 
-  return { prefixes, sourceColors, plugins };
+  return { schemaVersion: CONFIG_SCHEMA_VERSION, prefixes, sourceColors, plugins };
 }
 
 export { DEFAULT_CONFIG };
@@ -123,6 +137,43 @@ export function mergeHistoryCache(existing: Map<string, HistoryEntry>, items: Ar
       existing.set(h.url, { url: h.url, title: h.title, visitCount: h.visitCount ?? 0, lastVisitTime: h.lastVisitTime ?? 0 });
     }
   }
+}
+
+export function filterBookmarks(items: RawBookmarkItem[]): BookmarkEntry[] {
+  const out: BookmarkEntry[] = [];
+  for (const b of items) if (b.url && b.title) out.push({ url: b.url, title: b.title });
+  return out;
+}
+
+export function filterTabs(items: RawTabItem[]): TabEntry[] {
+  const out: TabEntry[] = [];
+  for (const t of items) {
+    if (t.url && t.title && t.id !== undefined && t.windowId !== undefined) {
+      out.push({ url: t.url, title: t.title, tabId: t.id, windowId: t.windowId });
+    }
+  }
+  return out;
+}
+
+/** Fetch fresh data through the port, merge history in place, return rebuilt bookmark/tab caches. */
+export async function loadCaches(port: BrowserDataPort, history: Map<string, HistoryEntry>): Promise<{ bookmarks: BookmarkEntry[]; tabs: TabEntry[] }> {
+  const [historyItems, bookmarkItems, tabItems] = await Promise.all([
+    port.searchHistory(),
+    port.getRecentBookmarks(),
+    port.queryTabs(),
+  ]);
+  mergeHistoryCache(history, historyItems);
+  return { bookmarks: filterBookmarks(bookmarkItems), tabs: filterTabs(tabItems) };
+}
+
+export function serializeCaches(history: Map<string, HistoryEntry>, bookmarks: BookmarkEntry[], tabs: TabEntry[]): CacheSnapshot {
+  return { history: [...history.values()], bookmarks, tabs };
+}
+
+/** Hydrate caches from a persisted snapshot. Returns the bookmark/tab caches; history is merged in place. */
+export function applySnapshot(snapshot: CacheSnapshot, history: Map<string, HistoryEntry>): { bookmarks: BookmarkEntry[]; tabs: TabEntry[] } {
+  for (const h of snapshot.history) history.set(h.url, h);
+  return { bookmarks: snapshot.bookmarks, tabs: snapshot.tabs };
 }
 
 // ── Query layer: scoring, dedup by urlKey, filtering ──
@@ -190,13 +241,6 @@ export function mergeResults(
   }
 
   return merged.sort((a, b) => b.score - a.score).slice(0, 20);
-}
-
-export function looksLikeUrl(s: string): boolean {
-  if (s.includes(" ")) return false;
-  if (/^https?:\/\//.test(s)) return true;
-  if (/^\d{1,3}(\.\d{1,3}){3}(\/|:|$)/.test(s)) return true;
-  return /^[^\s]+\.[a-z]{2,}(\/|$)/i.test(s);
 }
 
 export function suggestGhost(query: string, entries: { url: string; visitCount: number }[]): string {

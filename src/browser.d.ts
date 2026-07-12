@@ -2,13 +2,22 @@
 // Chrome MV3 uses chrome.* namespace with Promise-based APIs
 // Firefox MV3 also supports chrome.* namespace
 
+// Injected at build time by esbuild define
+declare const __VERSION__: string;
+
 declare namespace chrome {
   namespace storage {
     interface StorageChange { oldValue?: unknown; newValue?: unknown }
+    interface StorageArea {
+      get(keys: string | string[]): Promise<Record<string, unknown>>;
+      set(items: Record<string, unknown>): Promise<void>;
+    }
     namespace local {
       function get(keys: string | string[]): Promise<Record<string, unknown>>;
       function set(items: Record<string, unknown>): Promise<void>;
     }
+    // Firefox exposes session from v115+; may be absent on older builds — feature-detect at runtime.
+    const session: StorageArea | undefined;
     const onChanged: {
       addListener(callback: (changes: Record<string, StorageChange>) => void): void;
     };
@@ -26,10 +35,16 @@ declare namespace chrome {
   }
 
   namespace tabs {
-    interface Tab { id?: number; windowId?: number; title?: string; url?: string; index?: number }
+    interface Tab { id?: number; windowId?: number; title?: string; url?: string; index?: number; groupId?: number }
     function query(queryInfo: Record<string, unknown>): Promise<Tab[]>;
     function update(tabId: number, updateProperties: { active?: boolean; url?: string }): Promise<Tab>;
     function create(createProperties: { url: string; index?: number }): Promise<Tab>;
+    function remove(tabId: number): Promise<void>;
+    function group(options: { tabIds: number | number[]; groupId?: number }): Promise<number>;
+  }
+
+  namespace search {
+    function query(queryInfo: { text: string; disposition?: "CURRENT_TAB" | "NEW_TAB" | "NEW_WINDOW" }): void;
   }
 
   namespace windows {

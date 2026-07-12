@@ -25,6 +25,7 @@ export interface TemplatePlugin {
 export type Plugin = FilterPlugin | TemplatePlugin;
 
 export interface Config {
+  schemaVersion?: number;
   prefixes: Record<string, string>;
   sourceColors: Record<string, string>;
   plugins: Plugin[];
@@ -48,6 +49,25 @@ export interface TabEntry {
   title: string;
   tabId: number;
   windowId: number;
+}
+
+// Raw browser-API shapes consumed by the cache builders (adapter boundary)
+export interface RawHistoryItem { url?: string; title?: string; visitCount?: number; lastVisitTime?: number }
+export interface RawBookmarkItem { url?: string; title?: string }
+export interface RawTabItem { id?: number; windowId?: number; title?: string; url?: string }
+
+// Port over the browser data APIs — lets the cache layer be unit-tested with a fake
+export interface BrowserDataPort {
+  searchHistory(): Promise<RawHistoryItem[]>;
+  getRecentBookmarks(): Promise<RawBookmarkItem[]>;
+  queryTabs(): Promise<RawTabItem[]>;
+}
+
+// Serializable snapshot persisted to storage.session to warm caches across SW wakes
+export interface CacheSnapshot {
+  history: HistoryEntry[];
+  bookmarks: BookmarkEntry[];
+  tabs: TabEntry[];
 }
 
 // Query layer output
@@ -76,6 +96,7 @@ export interface SearchResponse {
   sourceColors: Record<string, string>;
   plugin: Plugin | null;
   source: string | null;
+  ghost: string;
 }
 
 // Functional plugin protocol (content ↔ background)
