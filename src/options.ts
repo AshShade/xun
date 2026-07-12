@@ -1,6 +1,4 @@
-declare const validateConfig: typeof import("./lib").validateConfig;
-declare const DEFAULT_CONFIG: typeof import("./lib").DEFAULT_CONFIG;
-
+import { validateConfig, DEFAULT_CONFIG } from "./lib";
 import type { Config, Plugin, Shortcut } from "./types";
 
 const status = document.getElementById("status")!;

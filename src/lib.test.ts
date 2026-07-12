@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { globMatch, matchesPlugin, parseQuery, decayScore, TAB_BONUS, BOOKMARK_BONUS, fuzzyMatch, textMatch, mergeResults, urlKey, validateConfig, mergeHistoryCache, queryHistory, queryBookmarks, queryTabs, looksLikeUrl, computeExpression, suggestGhost } from "./lib";
+import { globMatch, matchesPlugin, parseQuery, decayScore, TAB_BONUS, BOOKMARK_BONUS, fuzzyMatch, textMatch, mergeResults, urlKey, validateConfig, CONFIG_SCHEMA_VERSION, mergeHistoryCache, filterBookmarks, filterTabs, loadCaches, serializeCaches, applySnapshot, queryHistory, queryBookmarks, queryTabs, computeExpression, suggestGhost } from "./lib";
 import { truncateUrl, buildResultRow } from "./dom";
-import type { Config, HistoryEntry, FilterPlugin, TemplatePlugin, SearchResult } from "./types";
+import type { Config, HistoryEntry, FilterPlugin, TemplatePlugin, SearchResult, BrowserDataPort } from "./types";
 
 describe("globMatch", () => {
   it("matches domain-only patterns with auto /**", () => {
@@ -283,6 +283,10 @@ describe("validateConfig", () => {
   it("returns defaults for null/undefined", () => {
     expect(validateConfig(null).plugins).toEqual([]);
   });
+  it("stamps the current schema version", () => {
+    expect(validateConfig(null).schemaVersion).toBe(CONFIG_SCHEMA_VERSION);
+    expect(validateConfig({ prefixes: {} }).schemaVersion).toBe(CONFIG_SCHEMA_VERSION);
+  });
   it("preserves valid fields and fills missing", () => {
     const c = validateConfig({ prefixes: { history: "hist" } });
     expect(c.prefixes.history).toBe("hist");
@@ -453,30 +457,6 @@ describe("textMatch", () => {
   });
 });
 
-describe("looksLikeUrl", () => {
-  it("matches domain with TLD", () => {
-    expect(looksLikeUrl("github.com")).toBe(true);
-    expect(looksLikeUrl("github.com/user/repo")).toBe(true);
-    expect(looksLikeUrl("docs.example.com")).toBe(true);
-  });
-  it("matches explicit protocol", () => {
-    expect(looksLikeUrl("https://example.com")).toBe(true);
-    expect(looksLikeUrl("http://localhost:3000")).toBe(true);
-  });
-  it("rejects plain words", () => {
-    expect(looksLikeUrl("hello world")).toBe(false);
-    expect(looksLikeUrl("just a search")).toBe(false);
-    expect(looksLikeUrl("react")).toBe(false);
-  });
-  it("rejects dots without valid TLD", () => {
-    expect(looksLikeUrl("file.a")).toBe(false);
-    expect(looksLikeUrl("v1.0")).toBe(false);
-  });
-  it("matches IP-like patterns", () => {
-    expect(looksLikeUrl("192.168.1.1")).toBe(true);
-  });
-});
-
 describe("truncateUrl", () => {
   it("returns full URL unchanged", () => {
     expect(truncateUrl("https://github.com/user/repo")).toBe("https://github.com/user/repo");
@@ -627,4 +607,62 @@ describe("suggestGhost", () => {
     ];
     expect(suggestGhost("example", dupes)).toBe(".com/page");
   });
+
+
+describe("filterBookmarks", () => {
+  it("keeps entries with url and title", () => {
+    expect(filterBookmarks([{ url: "https://a.com", title: "A" }])).toEqual([{ url: "https://a.com", title: "A" }]);
+  });
+  it("drops entries missing url or title (folders)", () => {
+    expect(filterBookmarks([{ title: "folder" }, { url: "https://b.com" }, { url: "https://c.com", title: "C" }]))
+      .toEqual([{ url: "https://c.com", title: "C" }]);
+  });
+});
+
+describe("filterTabs", () => {
+  it("maps id/windowId to tabId/windowId", () => {
+    expect(filterTabs([{ id: 5, windowId: 2, title: "T", url: "https://t.com" }]))
+      .toEqual([{ url: "https://t.com", title: "T", tabId: 5, windowId: 2 }]);
+  });
+  it("drops tabs missing required fields", () => {
+    expect(filterTabs([{ id: 1, title: "no window", url: "https://x.com" }, { windowId: 2, title: "no id", url: "https://y.com" }]))
+      .toEqual([]);
+  });
+  it("keeps tab with id 0 (falsy but valid)", () => {
+    expect(filterTabs([{ id: 0, windowId: 0, title: "T", url: "https://z.com" }]))
+      .toEqual([{ url: "https://z.com", title: "T", tabId: 0, windowId: 0 }]);
+  });
+});
+
+describe("loadCaches", () => {
+  const fakePort: BrowserDataPort = {
+    searchHistory: async () => [{ url: "https://h.com", title: "H", visitCount: 3, lastVisitTime: 100 }],
+    getRecentBookmarks: async () => [{ url: "https://b.com", title: "B" }, { title: "folder" }],
+    queryTabs: async () => [{ id: 1, windowId: 1, title: "T", url: "https://t.com" }],
+  };
+  it("fetches through the port, merges history, returns filtered caches", async () => {
+    const history = new Map<string, HistoryEntry>();
+    const { bookmarks, tabs } = await loadCaches(fakePort, history);
+    expect(history.get("https://h.com")).toEqual({ url: "https://h.com", title: "H", visitCount: 3, lastVisitTime: 100 });
+    expect(bookmarks).toEqual([{ url: "https://b.com", title: "B" }]);
+    expect(tabs).toEqual([{ url: "https://t.com", title: "T", tabId: 1, windowId: 1 }]);
+  });
+});
+
+describe("serializeCaches / applySnapshot", () => {
+  it("round-trips caches through a snapshot", () => {
+    const history = new Map<string, HistoryEntry>([
+      ["https://h.com", { url: "https://h.com", title: "H", visitCount: 2, lastVisitTime: 50 }],
+    ]);
+    const bookmarks = [{ url: "https://b.com", title: "B" }];
+    const tabs = [{ url: "https://t.com", title: "T", tabId: 1, windowId: 1 }];
+    const snapshot = serializeCaches(history, bookmarks, tabs);
+
+    const restored = new Map<string, HistoryEntry>();
+    const { bookmarks: rb, tabs: rt } = applySnapshot(snapshot, restored);
+    expect([...restored.values()]).toEqual([...history.values()]);
+    expect(rb).toEqual(bookmarks);
+    expect(rt).toEqual(tabs);
+  });
+});
 });

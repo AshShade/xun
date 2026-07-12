@@ -4,17 +4,19 @@
 import type { SearchResponse, Shortcut } from "./types";
 import type { FnResponse } from "./types";
 import type { Mode, State, TextSegment, ResultItemModel, PluginLabelModel, GhostModel, PreviewModel, UIModel } from "./types";
-const VERSION = "__VERSION__";
+import type { Message, MessageResponseMap } from "./messages";
+import { computeUI, computeMode, looksLikeUrl } from "./render-model";
+const VERSION = __VERSION__;
 const isNewTab = location.pathname.endsWith("newtab.html");
+
+function sendMsg<T extends Message["type"]>(msg: Extract<Message, { type: T }>): Promise<MessageResponseMap[T]> {
+  return chrome.runtime.sendMessage(msg) as Promise<MessageResponseMap[T]>;
+}
 
 function clearInput(): void {
   const inp = overlay?.querySelector<HTMLInputElement>("#xun-input");
   if (inp) { inp.value = ""; onInput({ target: inp } as unknown as Event); }
 }
-
-// render-model.ts functions loaded as globals via manifest scripts array
-declare const computeUI: (s: State) => UIModel;
-declare const hexToRgba: (hex: string, alpha: number) => string;
 
 // ═══════════════════════════════════════════════════════════
 // Layer 1: State — raw data, only mutated by user events
@@ -174,25 +176,7 @@ let shadow: ShadowRoot | null = null;
 let overlay: HTMLDivElement | null = null;
 let deepTimer: ReturnType<typeof setTimeout> | null = null;
 
-function looksLikeUrl(s: string): boolean {
-  if (s.includes(" ")) return false;
-  if (/^https?:\/\//.test(s)) return true;
-  if (/^\d{1,3}(\.\d{1,3}){3}(\/|:|$)/.test(s)) return true;
-  return /^[^\s]+\.[a-z]{2,}(\/|$)/i.test(s);
-}
-
-function detectMode(): Mode {
-  if (state.functionalListing || state.functionalPlugin) return "functional";
-  if (state.activePlugin) return "plugin";
-  return "normal";
-}
-
-function requestGhost(): void {
-  if (state.mode !== "normal") { setState({ ghost: "" }); return; }
-  chrome.runtime.sendMessage({ type: "suggest", query: state.query }).then((ghost: unknown) => {
-    if (typeof ghost === "string") setState({ ghost });
-  });
-}
+// Ghost text is now returned as part of the search/deep-search response
 
 // ═══════════════════════════════════════════════════════════
 // Actions — called by renderers via callbacks, mutate state
@@ -203,7 +187,7 @@ function handleResultAction(index: number, newTab: boolean): void {
     const fr = state.functionalResults[index];
     if (!fr) return;
     if (fr.action === "copy") { navigator.clipboard.writeText(fr.value); close(); }
-    else if (fr.action === "open" && fr.url) { chrome.runtime.sendMessage({ type: "navigate", url: fr.url, newTab }); close(); }
+    else if (fr.action === "open" && fr.url) { sendMsg({ type: "navigate", url: fr.url, newTab }); close(); }
     else {
       const input = overlay!.querySelector<HTMLInputElement>("#xun-input")!;
       const prefix = fr.fillValue ?? state.functionalPlugin?.prefix ?? fr.value.split(" ")[0] ?? "";
@@ -221,7 +205,7 @@ function handleResultHover(index: number): void {
 }
 
 function navigate(item: SearchResponse["results"][number], newTab = false): void {
-  chrome.runtime.sendMessage({ type: "navigate", url: item.url, tabId: item.tabId, windowId: item.windowId, newTab });
+  sendMsg({ type: "navigate", url: item.url, tabId: item.tabId, windowId: item.windowId, newTab });
   close();
 }
 
@@ -261,8 +245,7 @@ chrome.runtime.onMessage.addListener((msg: { type: string }) => {
 function toggle(): void { host ? close() : open(); }
 
 function open(): void {
-  chrome.runtime.sendMessage({ type: "refresh-cache" });
-  chrome.runtime.sendMessage({ type: "get-config" });
+  sendMsg({ type: "refresh-cache" });
   host = document.createElement("div");
   host.id = "xun-host";
   shadow = host.attachShadow({ mode: "open" });
@@ -336,14 +319,14 @@ function onInput(e: Event): void {
 
   // Functional plugin mode
   if (trimmed.startsWith("/")) {
-    // #IF_DEV
+    DEV: {
     console.log("[xun:content] sending fn message:", trimmed);
-    // #END_IF_DEV
-    chrome.runtime.sendMessage({ type: "fn", query: query.trimStart() }).then((res: unknown) => {
-      // #IF_DEV
+    }
+    sendMsg({ type: "fn", query: query.trimStart() }).then((res) => {
+      DEV: {
       console.log("[xun:content] fn response:", JSON.stringify(res));
-      // #END_IF_DEV
-      const r = res as FnResponse | undefined;
+      }
+      const r = res;
       if (!r) return;
       setState({
         query, results: [], hasPrefix: true, activePlugin: null, source: null,
@@ -352,9 +335,9 @@ function onInput(e: Event): void {
         selectedIndex: r.results.length > 0 ? 0 : -1, mode: "functional", ghost: "",
       });
     }).catch((err: unknown) => {
-      // #IF_DEV
+      DEV: {
       console.error("[xun:content] fn error:", err);
-      // #END_IF_DEV
+      }
     });
     return;
   }
@@ -367,8 +350,7 @@ function onInput(e: Event): void {
     setState({ query, results: [], hasPrefix: false, selectedIndex: -1, activePlugin: null, source: null, mode: "normal", ghost: "", functionalResults: [], functionalPlugin: null, functionalListing: false });
     return;
   }
-  chrome.runtime.sendMessage({ type: "search", query: searchQuery }).then((raw: unknown) => {
-    const res = raw as SearchResponse;
+  sendMsg({ type: "search", query: searchQuery }).then((res) => {
     setState({
       query,
       results: res.results,
@@ -379,13 +361,11 @@ function onInput(e: Event): void {
       selectedIndex: res.hasPrefix && res.results.length > 0 ? 0 : -1,
       functionalResults: [], functionalPlugin: null, functionalListing: false,
     });
-    const mode = detectMode();
-    setState({ mode });
-    requestGhost();
+    const mode = computeMode(state);
+    setState({ mode, ghost: res.ghost });
   });
   deepTimer = setTimeout(() => {
-    chrome.runtime.sendMessage({ type: "deep-search", query: searchQuery }).then((raw: unknown) => {
-      const res = raw as SearchResponse;
+    sendMsg({ type: "deep-search", query: searchQuery }).then((res) => {
       if (state.query.trim() !== trimmed) return;
       const prevSelected = state.selectedIndex;
       setState({
@@ -397,11 +377,10 @@ function onInput(e: Event): void {
         selectedIndex: prevSelected >= 0 ? Math.min(prevSelected, res.results.length - 1) : -1,
         functionalResults: [], functionalPlugin: null, functionalListing: false,
       });
-      const mode = detectMode();
-      setState({ mode });
-      requestGhost();
+      const mode = computeMode(state);
+      setState({ mode, ghost: res.ghost });
     });
-  }, 300);
+  }, 100);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -442,7 +421,7 @@ function onKeydown(e: KeyboardEvent): void {
       if (looksLikeUrl(q)) {
         navigate({ type: "history", title: "", url: q.includes("://") ? q : "https://" + q, score: 0 }, newTab);
       } else {
-        chrome.runtime.sendMessage({ type: "default-search", query: q, newTab });
+        sendMsg({ type: "default-search", query: q, newTab });
         close();
       }
     }

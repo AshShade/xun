@@ -1,5 +1,5 @@
 import { describe, test, expect } from "vitest";
-import { segmentHighlight, hexToRgba, computeResultItems, computePluginLabel, computeGhost, computePreview, computeUI } from "./render-model";
+import { segmentHighlight, hexToRgba, looksLikeUrl, computeMode, computeResultItems, computePluginLabel, computeGhost, computePreview, computeUI } from "./render-model";
 import type { State } from "./types";
 
 // --- Factory for default state ---
@@ -381,5 +381,47 @@ describe("computeUI", () => {
     expect(ui.pluginLabel.visible).toBe(false);
     expect(ui.ghost).toEqual({ ghost: "", mirror: "" });
     expect(ui.preview.visible).toBe(false);
+  });
+});
+
+describe("computeMode", () => {
+  test("normal when no plugin or functional state", () => {
+    expect(computeMode(makeState())).toBe("normal");
+  });
+  test("plugin when activePlugin set", () => {
+    expect(computeMode(makeState({ activePlugin: { name: "p" } as never }))).toBe("plugin");
+  });
+  test("functional when functionalListing set", () => {
+    expect(computeMode(makeState({ functionalListing: true }))).toBe("functional");
+  });
+  test("functional when functionalPlugin set", () => {
+    expect(computeMode(makeState({ functionalPlugin: { name: "p" } as never }))).toBe("functional");
+  });
+  test("functional takes precedence over plugin", () => {
+    expect(computeMode(makeState({ activePlugin: { name: "p" } as never, functionalListing: true }))).toBe("functional");
+  });
+});
+
+describe("looksLikeUrl", () => {
+  test("matches domain with TLD", () => {
+    expect(looksLikeUrl("github.com")).toBe(true);
+    expect(looksLikeUrl("github.com/user/repo")).toBe(true);
+    expect(looksLikeUrl("docs.example.com")).toBe(true);
+  });
+  test("matches explicit protocol", () => {
+    expect(looksLikeUrl("https://example.com")).toBe(true);
+    expect(looksLikeUrl("http://localhost:3000")).toBe(true);
+  });
+  test("rejects plain words", () => {
+    expect(looksLikeUrl("hello world")).toBe(false);
+    expect(looksLikeUrl("just a search")).toBe(false);
+    expect(looksLikeUrl("react")).toBe(false);
+  });
+  test("rejects dots without valid TLD", () => {
+    expect(looksLikeUrl("file.a")).toBe(false);
+    expect(looksLikeUrl("v1.0")).toBe(false);
+  });
+  test("matches IP-like patterns", () => {
+    expect(looksLikeUrl("192.168.1.1")).toBe(true);
   });
 });

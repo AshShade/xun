@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 const fs = require("fs");
 const path = require("path");
+const esbuild = require("esbuild");
 
 const release = process.argv.includes("--release");
 const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
@@ -14,6 +15,7 @@ function copyDir(src, dst) {
     entry.isDirectory() ? copyDir(s, d) : fs.copyFileSync(s, d);
   }
 }
+fs.rmSync("dist", { recursive: true, force: true });
 copyDir("public", "dist");
 
 // 2. Update manifest version
@@ -22,22 +24,25 @@ const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
 manifest.version = pkg.version;
 fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
 
-// 3. Post-process compiled JS in dist/
-for (const f of fs.readdirSync("dist").filter(f => f.endsWith(".js"))) {
-  const fp = path.join("dist", f);
-  let code = fs.readFileSync(fp, "utf8");
-  code = code.replace(/^export /gm, "");
-  code = code.replace(/__VERSION__/g, version);
-  if (release) code = code.replace(/\/\/ #IF_DEV[\s\S]*?\/\/ #END_IF_DEV\n?/g, "");
-  fs.writeFileSync(fp, code);
-}
+// 3. Bundle each entry point as a self-contained IIFE
+esbuild.buildSync({
+  entryPoints: {
+    background: "src/background.ts",
+    content: "src/content.ts",
+    options: "src/options.ts",
+    editor: "src/editor.ts",
+  },
+  outdir: "dist",
+  bundle: true,
+  format: "iife",
+  target: "es2022",
+  minify: release,
+  legalComments: "none",
+  dropLabels: release ? ["DEV"] : [],
+  define: { __VERSION__: JSON.stringify(version) },
+});
 
-// 4. Bundle background: lib.js + render-model.js + background.js → background.bundle.js
-const bundleParts = ["lib.js", "render-model.js", "background.js"];
-const bundle = bundleParts.map(f => fs.readFileSync(path.join("dist", f), "utf8")).join("\n");
-fs.writeFileSync(path.join("dist", "background.bundle.js"), bundle);
-
-// 5. Write .build-info for TUI switcher
+// 4. Write .build-info for TUI switcher
 const branch = (() => {
   try {
     const head = fs.readFileSync(".git", "utf8").trim();
@@ -56,7 +61,7 @@ fs.writeFileSync(path.join("dist", ".build-info"), `branch=${branch}\nversion=${
 
 console.log(`Built ${version} [${branch}]${release ? " (release)" : ""}`);
 
-// 6. Release: create browser-specific dist directories
+// 5. Release: create browser-specific dist directories
 if (release) {
   function copyDirSync(src, dst) {
     fs.mkdirSync(dst, { recursive: true });
@@ -65,6 +70,9 @@ if (release) {
       entry.isDirectory() ? copyDirSync(s, d) : fs.copyFileSync(s, d);
     }
   }
+
+  fs.rmSync("dist-firefox", { recursive: true, force: true });
+  fs.rmSync("dist-chrome", { recursive: true, force: true });
 
   // Firefox: keep as-is (supports both scripts and service_worker keys)
   copyDirSync("dist", "dist-firefox");

@@ -7,3 +7,5 @@ dist/
 dist-firefox/
 dist-chrome/
 worktrees/
+test-results/
+playwright-report/
