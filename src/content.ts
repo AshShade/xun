@@ -6,6 +6,7 @@ import type { FnResponse } from "./types";
 import type { Mode, State, TextSegment, ResultItemModel, PluginLabelModel, GhostModel, PreviewModel, UIModel } from "./types";
 import type { Message, MessageResponseMap } from "./messages";
 import { computeUI, computeMode, looksLikeUrl } from "./render-model";
+import { shouldSearch } from "./lib";
 const VERSION = __VERSION__;
 const isNewTab = location.pathname.endsWith("newtab.html");
 
@@ -346,7 +347,7 @@ function onInput(e: Event): void {
   const searchQuery = (trimmed.startsWith('"') && trimmed.endsWith('"') && trimmed.length > 1)
     ? trimmed.slice(1, -1) : trimmed;
 
-  if (!hasSpace && trimmed.length < 2) {
+  if (!shouldSearch(trimmed, hasSpace)) {
     setState({ query, results: [], hasPrefix: false, selectedIndex: -1, activePlugin: null, source: null, mode: "normal", ghost: "", functionalResults: [], functionalPlugin: null, functionalListing: false });
     return;
   }

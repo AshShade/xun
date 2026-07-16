@@ -5,7 +5,7 @@ import {
   matchesPlugin, parseQuery, mergeResults, validateConfig, DEFAULT_CONFIG,
   mergeHistoryCache, loadCaches, serializeCaches, applySnapshot,
   queryHistory, queryBookmarks, queryTabs,
-  computeExpression, fuzzyMatch, suggestGhost, decayScore, textMatch,
+  computeExpression, fuzzyMatch, suggestGhost, decayScore, textMatch, shouldSearch,
 } from "./lib";
 
 import type { BookmarkEntry, BrowserDataPort, CacheSnapshot, Config, FnResponse, HistoryEntry, SearchResponse, TabEntry } from "./types";
@@ -175,8 +175,12 @@ chrome.runtime.onMessage.addListener((msg: Message, sender: chrome.runtime.Messa
     return true;
   }
   if (msg.type === "default-search") {
+    const isNewTab = sender.tab?.url?.includes("newtab.html");
     const disposition = msg.newTab ? "NEW_TAB" : "CURRENT_TAB";
-    chrome.search.query({ text: msg.query, disposition });
+    const senderTabId = (msg.newTab && isNewTab) ? sender.tab?.id : undefined;
+    chrome.search.query({ text: msg.query, disposition }, () => {
+      if (senderTabId) chrome.tabs.remove(senderTabId);
+    });
     return;
   }
   if (msg.type === "navigate") {
@@ -187,11 +191,13 @@ chrome.runtime.onMessage.addListener((msg: Message, sender: chrome.runtime.Messa
       if (isNewTab && sender.tab?.id) chrome.tabs.remove(sender.tab.id);
     } else if (msg.newTab) {
       const idx = sender.tab?.index !== undefined ? sender.tab.index + 1 : undefined;
-      const tab = chrome.tabs.create({ url: msg.url, index: idx });
-      if (sender.tab && sender.tab.groupId !== undefined && sender.tab.groupId > 0) {
-        const groupId = sender.tab.groupId;
-        tab.then(t => { if (t.id) chrome.tabs.group({ tabIds: t.id, groupId }); });
-      }
+      const groupId = (sender.tab && sender.tab.groupId !== undefined && sender.tab.groupId > 0)
+        ? sender.tab.groupId : undefined;
+      const senderTabId = isNewTab ? sender.tab?.id : undefined;
+      chrome.tabs.create({ url: msg.url, index: idx }).then(t => {
+        if (t.id && groupId !== undefined) chrome.tabs.group({ tabIds: t.id, groupId });
+        if (senderTabId) chrome.tabs.remove(senderTabId);
+      });
     } else if (sender.tab?.id) {
       chrome.tabs.update(sender.tab.id, { url: msg.url });
     }
@@ -203,7 +209,7 @@ function handleSearch(raw: string): SearchResponse {
   const hasPrefix = !!(source || plugin);
   const ghost = (!hasPrefix && query) ? handleSuggest(raw) : "";
 
-  if (!hasPrefix && (!query || query.length < 2)) {
+  if (!shouldSearch(query, hasPrefix)) {
     return { results: [], hasPrefix, sourceColors: config.sourceColors, plugin, source, ghost };
   }
 

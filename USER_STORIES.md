@@ -27,8 +27,9 @@ When you open a new tab, Xun is already there — no need to press Cmd+K.
 | 6 | User presses Escape on new tab | Input clears, Xun stays open (nowhere to "close" to) |
 | 7 | User clicks backdrop on new tab | Input clears, Xun stays open |
 | 8 | User selects result with Enter on new tab | Navigates in the same tab (replaces new tab) |
-| 9 | User selects result with Cmd+Enter on new tab | Opens in a new tab, input clears, Xun stays for next action |
+| 9 | User selects result with Cmd+Enter on new tab | Opens in a new tab, the new tab page closes |
 | 10 | User selects an open tab result on new tab | Switches to that tab, new tab closes automatically |
+| 40 | User types a no-results query and Cmd+Enter on new tab | Default search opens in a new tab, the new tab page closes |
 
 ## Finding Things
 
@@ -42,6 +43,7 @@ Type anything — words from page titles, parts of URLs, domain names. Results a
 | 14 | User sees an open tab in results | Tab results have +300 score bonus, appear near top |
 | 15 | User has visited same URL with different query params | Only one entry shown (deduplicated by origin+pathname) |
 | 16 | User types a query and waits 100ms | Deep search fetches additional results from full browser history |
+| 41 | User types a single character (no prefix) | Dropdown shows ranked results from the first keystroke |
 
 ## Navigating Results
 

@@ -39,6 +39,16 @@ export function parseQuery(raw: string, config: Config): ParsedQuery {
   return { query: raw, source: null, plugin: null };
 }
 
+// Minimum length for a bare (no-prefix) query to trigger a search.
+export const MIN_QUERY_LENGTH = 1;
+
+// A search runs when there's a prefix (h/t/b or plugin) or the bare query meets
+// the minimum length. Shared by content (pre-parse, passes hasSpace) and
+// background (post-parse, passes hasPrefix) so the threshold lives in one place.
+export function shouldSearch(query: string, hasPrefix: boolean): boolean {
+  return hasPrefix || query.length >= MIN_QUERY_LENGTH;
+}
+
 // Frecency decay: score = log2(visits+1) * e^(-RATE * sqrt(hours)) * SCALE
 const DECAY_RATE = 0.3;
 const DECAY_SCALE = 150;

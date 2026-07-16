@@ -44,7 +44,7 @@ declare namespace chrome {
   }
 
   namespace search {
-    function query(queryInfo: { text: string; disposition?: "CURRENT_TAB" | "NEW_TAB" | "NEW_WINDOW" }): void;
+    function query(queryInfo: { text: string; disposition?: "CURRENT_TAB" | "NEW_TAB" | "NEW_WINDOW" }, callback?: () => void): void;
   }
 
   namespace windows {
