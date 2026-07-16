@@ -102,7 +102,8 @@ test.describe("New Tab Integration", () => {
     // The fix closes the newtab page and opens the site in a new tab.
     const newPagePromise = context.waitForEvent("page");
     const closePromise = page.waitForEvent("close");
-    await page.keyboard.press(isMac ? "Meta+Enter" : "Control+Enter");
+    // The press closes its own page, so its CDP ack may never return — swallow that.
+    await page.keyboard.press(isMac ? "Meta+Enter" : "Control+Enter").catch(() => {});
     const newPage = await newPagePromise;
     await closePromise; // newtab page removed
     const newtabStillOpen = context.pages().some(p => p.url().includes("newtab.html"));
@@ -141,7 +142,8 @@ test.describe("New Tab Integration", () => {
     // No results + Cmd+Enter routes to default-search (NEW_TAB); the newtab page should close.
     const newPagePromise = context.waitForEvent("page");
     const closePromise = newtab.waitForEvent("close");
-    await newtab.keyboard.press(isMac ? "Meta+Enter" : "Control+Enter");
+    // The press closes its own page, so its CDP ack may never return — swallow that.
+    await newtab.keyboard.press(isMac ? "Meta+Enter" : "Control+Enter").catch(() => {});
     await newPagePromise; // browser search opened in a new tab
     await closePromise;   // newtab page removed
     const newtabStillOpen = context.pages().some(p => p.url().includes("newtab.html"));
