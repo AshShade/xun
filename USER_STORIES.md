@@ -27,8 +27,9 @@ When you open a new tab, Xun is already there — no need to press Cmd+K.
 | 6 | User presses Escape on new tab | Input clears, Xun stays open (nowhere to "close" to) |
 | 7 | User clicks backdrop on new tab | Input clears, Xun stays open |
 | 8 | User selects result with Enter on new tab | Navigates in the same tab (replaces new tab) |
-| 9 | User selects result with Cmd+Enter on new tab | Opens in a new tab, input clears, Xun stays for next action |
+| 9 | User selects result with Cmd+Enter on new tab | Opens in a new tab, the new tab page closes |
 | 10 | User selects an open tab result on new tab | Switches to that tab, new tab closes automatically |
+| 40 | User types a no-results query and Cmd+Enter on new tab | Default search opens in a new tab, the new tab page closes |
 
 ## Finding Things
 

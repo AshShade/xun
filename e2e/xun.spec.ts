@@ -92,17 +92,22 @@ test.describe("New Tab Integration", () => {
     expect(page.url()).toContain("example.com");
   });
 
-  // USER_STORIES.md #9: User selects result with Cmd+Enter on new tab → opens new tab, Xun stays
-  test("Story 9: Cmd+Enter on new tab opens new tab, Xun stays", async ({ context, extensionId }) => {
+  // USER_STORIES.md #9: User selects result with Cmd+Enter on new tab → opens new tab, newtab page closes
+  test("Story 9: Cmd+Enter on new tab opens new tab and closes newtab", async ({ context, extensionId }) => {
     const page = await context.newPage();
     await page.goto(`chrome-extension://${extensionId}/newtab.html?x`);
     await page.waitForFunction(() => document.getElementById("xun-host")?.shadowRoot?.getElementById("xun-input"));
     await typeInXun(page, "example.com");
     const isMac = process.platform === "darwin";
+    // The fix closes the newtab page and opens the site in a new tab.
+    const newPagePromise = context.waitForEvent("page");
+    const closePromise = page.waitForEvent("close");
     await page.keyboard.press(isMac ? "Meta+Enter" : "Control+Enter");
-    await page.waitForTimeout(500);
-    expect(await isOverlayVisible(page)).toBe(true);
-    expect(context.pages().length).toBeGreaterThan(2); // original + newtab + new page
+    const newPage = await newPagePromise;
+    await closePromise; // newtab page removed
+    const newtabStillOpen = context.pages().some(p => p.url().includes("newtab.html"));
+    expect(newtabStillOpen).toBe(false);
+    expect(newPage.url()).toContain("example.com");
   });
 
   // USER_STORIES.md #10: User selects an open tab result on new tab → switches to that tab, new tab closes
@@ -122,6 +127,24 @@ test.describe("New Tab Integration", () => {
     // newtab should be closed — page count should decrease
     const pages = context.pages();
     const newtabStillOpen = pages.some(p => p.url().includes("newtab.html"));
+    expect(newtabStillOpen).toBe(false);
+  });
+
+  // USER_STORIES.md #40: User types a no-results query and Cmd+Enter on new tab → default search opens in a new tab, newtab page closes
+  test("Story 40: Cmd+Enter default-search on new tab opens search tab and closes newtab", async ({ context, extensionId }) => {
+    const newtab = await context.newPage();
+    await newtab.goto(`chrome-extension://${extensionId}/newtab.html?x`);
+    await newtab.waitForFunction(() => document.getElementById("xun-host")?.shadowRoot?.getElementById("xun-input"));
+    await typeInXun(newtab, "xyzzy nonexistent query 12345");
+    await newtab.waitForTimeout(200);
+    const isMac = process.platform === "darwin";
+    // No results + Cmd+Enter routes to default-search (NEW_TAB); the newtab page should close.
+    const newPagePromise = context.waitForEvent("page");
+    const closePromise = newtab.waitForEvent("close");
+    await newtab.keyboard.press(isMac ? "Meta+Enter" : "Control+Enter");
+    await newPagePromise; // browser search opened in a new tab
+    await closePromise;   // newtab page removed
+    const newtabStillOpen = context.pages().some(p => p.url().includes("newtab.html"));
     expect(newtabStillOpen).toBe(false);
   });
 });
