@@ -5,7 +5,7 @@ import {
   matchesPlugin, parseQuery, mergeResults, validateConfig, DEFAULT_CONFIG,
   mergeHistoryCache, loadCaches, serializeCaches, applySnapshot,
   queryHistory, queryBookmarks, queryTabs,
-  computeExpression, fuzzyMatch, suggestGhost, decayScore, textMatch,
+  computeExpression, fuzzyMatch, suggestGhost, decayScore, textMatch, shouldSearch,
 } from "./lib";
 
 import type { BookmarkEntry, BrowserDataPort, CacheSnapshot, Config, FnResponse, HistoryEntry, SearchResponse, TabEntry } from "./types";
@@ -209,7 +209,7 @@ function handleSearch(raw: string): SearchResponse {
   const hasPrefix = !!(source || plugin);
   const ghost = (!hasPrefix && query) ? handleSuggest(raw) : "";
 
-  if (!hasPrefix && (!query || query.length < 2)) {
+  if (!shouldSearch(query, hasPrefix)) {
     return { results: [], hasPrefix, sourceColors: config.sourceColors, plugin, source, ghost };
   }
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { globMatch, matchesPlugin, parseQuery, decayScore, TAB_BONUS, BOOKMARK_BONUS, fuzzyMatch, textMatch, mergeResults, urlKey, validateConfig, CONFIG_SCHEMA_VERSION, mergeHistoryCache, filterBookmarks, filterTabs, loadCaches, serializeCaches, applySnapshot, queryHistory, queryBookmarks, queryTabs, computeExpression, suggestGhost } from "./lib";
+import { globMatch, matchesPlugin, parseQuery, decayScore, TAB_BONUS, BOOKMARK_BONUS, fuzzyMatch, textMatch, mergeResults, urlKey, validateConfig, CONFIG_SCHEMA_VERSION, mergeHistoryCache, filterBookmarks, filterTabs, loadCaches, serializeCaches, applySnapshot, queryHistory, queryBookmarks, queryTabs, computeExpression, suggestGhost, shouldSearch, MIN_QUERY_LENGTH } from "./lib";
 import { truncateUrl, buildResultRow } from "./dom";
 import type { Config, HistoryEntry, FilterPlugin, TemplatePlugin, SearchResult, BrowserDataPort } from "./types";
 
@@ -665,4 +665,27 @@ describe("serializeCaches / applySnapshot", () => {
     expect(rt).toEqual(tabs);
   });
 });
+});
+describe("shouldSearch", () => {
+  it("suppresses an empty bare query", () => {
+    expect(shouldSearch("", false)).toBe(false);
+  });
+
+  it("searches a single-character bare query", () => {
+    expect(shouldSearch("e", false)).toBe(true);
+  });
+
+  it("searches a multi-character bare query", () => {
+    expect(shouldSearch("example", false)).toBe(true);
+  });
+
+  it("searches an empty query when a prefix is present", () => {
+    expect(shouldSearch("", true)).toBe(true);
+  });
+
+  it("MIN_QUERY_LENGTH is 1 (dropdown shows from the first char)", () => {
+    expect(MIN_QUERY_LENGTH).toBe(1);
+    expect(shouldSearch("x".repeat(MIN_QUERY_LENGTH), false)).toBe(true);
+    expect(shouldSearch("x".repeat(MIN_QUERY_LENGTH - 1), false)).toBe(false);
+  });
 });

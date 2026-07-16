@@ -43,6 +43,7 @@ Type anything — words from page titles, parts of URLs, domain names. Results a
 | 14 | User sees an open tab in results | Tab results have +300 score bonus, appear near top |
 | 15 | User has visited same URL with different query params | Only one entry shown (deduplicated by origin+pathname) |
 | 16 | User types a query and waits 100ms | Deep search fetches additional results from full browser history |
+| 41 | User types a single character (no prefix) | Dropdown shows ranked results from the first keystroke |
 
 ## Navigating Results
 

@@ -233,6 +233,17 @@ test.describe("Finding Things", () => {
     // Deep search should return >= same results (may add more from full history)
     expect(countAfter).toBeGreaterThanOrEqual(countBefore);
   });
+
+  // USER_STORIES.md #41: User types a single character (no prefix) → dropdown shows ranked results
+  test("Story 41: Single char shows results", async ({ context }) => {
+    const page = await context.newPage();
+    await page.goto("https://example.com");
+    await page.waitForTimeout(100);
+    await openXun(page);
+    await typeInXun(page, "e");
+    await page.waitForTimeout(200);
+    expect(await getResultCount(page)).toBeGreaterThan(0);
+  });
 });
 
 test.describe("Navigating Results", () => {
