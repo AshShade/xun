@@ -103,18 +103,15 @@ function saveConfig(): void {
   const plugins: Plugin[] = [...categoriesEl.querySelectorAll<HTMLDivElement>(".cat-row")].map((row) => {
     const name = row.querySelector<HTMLInputElement>("[name=name]")!.value;
     const prefix = row.querySelector<HTMLInputElement>("[name=prefix]")!.value.trim();
-    const pluginType = (row.dataset["pluginType"] ?? "filter") as "filter" | "template";
     const color = row.dataset["color"] ?? "";
-
-    if (pluginType === "template") {
-      return { name, prefix, pluginType, url: row.querySelector<HTMLInputElement>("[name=url]")!.value, color };
-    }
-    return {
-      name, prefix, pluginType,
-      patterns: row.querySelector<HTMLInputElement>("[name=patterns]")!.value.split(",").map((s) => stripProtocol(s.trim())).filter(Boolean),
-      color,
-    };
-  }).filter((p) => p.name && p.prefix);
+    const patterns = row.querySelector<HTMLInputElement>("[name=patterns]")!.value
+      .split(",").map((s) => stripProtocol(s.trim())).filter(Boolean);
+    const url = row.querySelector<HTMLInputElement>("[name=url]")!.value.trim();
+    const plugin: Plugin = { name, prefix, color };
+    if (patterns.length) plugin.patterns = patterns;
+    if (url) plugin.url = url;
+    return plugin;
+  }).filter((p) => p.name && p.prefix && (p.patterns?.length || p.url));
 
   const sourceColors: Record<string, string> = {};
   builtinRows.forEach((row) => { sourceColors[row.dataset["source"] ?? ""] = row.dataset["color"] ?? ""; });
@@ -129,37 +126,18 @@ function saveConfig(): void {
 
 function addCategoryRow(cat: Partial<Plugin> = {}): void {
   const color = cat.color || nextAvailableColor();
-  const pluginType = cat.pluginType || "filter";
   const row = document.createElement("div");
   row.className = "cat-row";
   row.dataset["color"] = color;
-  row.dataset["pluginType"] = pluginType;
-
-  const valueField = pluginType === "template"
-    ? `<input name="url" type="text" placeholder="https://example.com/search?q={}" value="${"url" in cat ? cat.url : ""}" />`
-    : `<input name="patterns" type="text" placeholder="*.example.com" value="${"patterns" in cat ? (cat.patterns ?? []).join(", ") : ""}" />`;
 
   row.innerHTML = `
     <input name="prefix" type="text" placeholder="x" value="${cat.prefix || ""}" />
     <input name="name" type="text" placeholder="Name" value="${cat.name || ""}" />
-    <select name="pluginType"><option value="filter"${pluginType === "filter" ? " selected" : ""}>Filter</option><option value="template"${pluginType === "template" ? " selected" : ""}>Template</option></select>
-    ${valueField}
+    <input name="patterns" type="text" placeholder="*.example.com (filter, optional)" value="${(cat.patterns ?? []).join(", ")}" />
+    <input name="url" type="text" placeholder="https://example.com/search?q={} (launch, optional)" value="${cat.url ?? ""}" />
     <div class="color-picker"></div>
     <button class="cat-remove">×</button>
   `;
-
-  row.querySelector("select")!.addEventListener("change", (e) => {
-    const newType = (e.target as HTMLSelectElement).value;
-    row.dataset["pluginType"] = newType;
-    const old = row.querySelector<HTMLInputElement>("[name=patterns],[name=url]")!;
-    const replacement = document.createElement("input");
-    replacement.type = "text";
-    if (newType === "template") { replacement.name = "url"; replacement.placeholder = "https://example.com/search?q={}"; }
-    else { replacement.name = "patterns"; replacement.placeholder = "*.example.com"; }
-    replacement.addEventListener("input", saveConfig);
-    old.replaceWith(replacement);
-    saveConfig();
-  });
 
   row.querySelector(".cat-remove")!.addEventListener("click", () => { row.remove(); refreshAllPickers(); saveConfig(); });
   row.querySelectorAll("input").forEach((el) => el.addEventListener("input", saveConfig));

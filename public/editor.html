@@ -39,26 +39,34 @@
   </div>
   <div id="docs" class="panel">
     <h3>Plugins</h3>
-    <p>Two types: <code>pattern</code> and <code>search</code>.</p>
+    <p>A plugin has a <code>prefix</code>, <code>name</code>, <code>color</code>, and any combination of <code>patterns</code> (filter results by URL glob) and <code>url</code> (a <code>{}</code> template to launch a site search). At least one is required.</p>
 
-    <h3>Pattern Plugin</h3>
-    <p>Filters results by URL glob pattern.</p>
+    <h3>Filter (patterns)</h3>
+    <p>Narrows results to URLs matching the glob patterns.</p>
 <pre class="example">{
   "name": "Wiki",
   "prefix": "w",
-  "pluginType": "pattern",
-  "patterns": ["docs.example.com"],
+  "patterns": ["docs.example.com/**"],
   "color": "#f38ba8"
 }</pre>
 
-    <h3>Search Plugin</h3>
-    <p>Redirects to a URL with <code>{}</code> replaced by query.</p>
+    <h3>Launch (url)</h3>
+    <p>Adds a launch row that opens the URL with <code>{}</code> replaced by your query.</p>
 <pre class="example">{
   "name": "CodeSearch",
   "prefix": "cs",
-  "pluginType": "search",
   "url": "https://grep.app/search?q={}",
   "color": "#fab387"
+}</pre>
+
+    <h3>Both</h3>
+    <p>Set both to filter local results and show a launch row pinned at the bottom.</p>
+<pre class="example">{
+  "name": "GitHub",
+  "prefix": "gh",
+  "patterns": ["github.com/**"],
+  "url": "https://github.com/search?q={}",
+  "color": "#a6e3a1"
 }</pre>
 
     <h3>Prefixes</h3>

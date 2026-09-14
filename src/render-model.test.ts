@@ -276,9 +276,9 @@ describe("computePluginLabel", () => {
     expect(model.visible).toBe(false);
   });
 
-  test("pattern plugin shows plugin name", () => {
+  test("plugin with patterns shows plugin name", () => {
     const model = computePluginLabel(makeState({
-      activePlugin: { name: "GitHub", prefix: "gh", pluginType: "pattern", patterns: ["github.com/**"], color: "#f0f" },
+      activePlugin: { name: "GitHub", prefix: "gh", patterns: ["github.com/**"], color: "#f0f" },
     }));
     expect(model.visible).toBe(true);
     expect(model.text).toBe("GitHub");
@@ -287,7 +287,7 @@ describe("computePluginLabel", () => {
 
   test("activePlugin without color falls back to default", () => {
     const model = computePluginLabel(makeState({
-      activePlugin: { name: "NoColor", prefix: "nc", pluginType: "pattern", patterns: [], color: "" },
+      activePlugin: { name: "NoColor", prefix: "nc", patterns: [], color: "" },
     }));
     expect(model.visible).toBe(true);
     expect(model.text).toBe("NoColor");
@@ -311,7 +311,7 @@ describe("computePluginLabel", () => {
     const model = computePluginLabel(makeState({
       functionalPlugin: { name: "Compute", prefix: "/compute" },
       functionalListing: true,
-      activePlugin: { name: "GitHub", prefix: "gh", pluginType: "pattern", patterns: [], color: "#f0f" },
+      activePlugin: { name: "GitHub", prefix: "gh", patterns: [], color: "#f0f" },
       source: "tabs",
     }));
     expect(model.visible).toBe(false);

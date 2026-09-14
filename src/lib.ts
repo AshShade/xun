@@ -11,7 +11,7 @@ export function globMatch(str: string, pattern: string): boolean {
 }
 
 export function matchesPlugin(url: string, plugin: Plugin | null | undefined): boolean {
-  if (!plugin || !("patterns" in plugin) || !plugin.patterns.length) return true;
+  if (!plugin || !("patterns" in plugin) || !plugin.patterns || !plugin.patterns.length) return true;
   try {
     const u = new URL(url);
     const bare = u.hostname + u.pathname;
@@ -19,6 +19,20 @@ export function matchesPlugin(url: string, plugin: Plugin | null | undefined): b
   } catch {
     return false;
   }
+}
+
+// Bottom "launch a site search" row for a plugin with a url template. Null when the
+// plugin has no url or the query is empty. {} in the url is replaced by the query.
+export function templateResult(plugin: Plugin | null | undefined, query: string): SearchResult | null {
+  if (!plugin || !plugin.url || !query) return null;
+  return {
+    type: "history",
+    title: `Search ${plugin.name}: ${query}`,
+    url: plugin.url.replace("{}", encodeURIComponent(query)),
+    score: 0,
+    categoryLabel: plugin.name,
+    categoryColor: plugin.color,
+  };
 }
 
 export function parseQuery(raw: string, config: Config): ParsedQuery {
@@ -93,7 +107,7 @@ export function textMatch(title: string, url: string, query: string): number {
   return Math.max(fuzzyMatch(title, query), fuzzyMatch(url, query), fuzzyMatch(title + " " + url, query));
 }
 
-export const CONFIG_SCHEMA_VERSION = 1;
+export const CONFIG_SCHEMA_VERSION = 2;
 
 const DEFAULT_CONFIG: Config = {
   schemaVersion: CONFIG_SCHEMA_VERSION,
@@ -115,13 +129,23 @@ export function validateConfig(raw: unknown): Config {
     : { ...DEFAULT_CONFIG.sourceColors };
 
   const rawPlugins = Array.isArray(obj["plugins"]) ? obj["plugins"] : [];
-  const plugins: Plugin[] = rawPlugins.filter((p: unknown): p is Plugin => {
-    if (!p || typeof p !== "object") return false;
+  const plugins: Plugin[] = [];
+  for (const p of rawPlugins) {
+    if (!p || typeof p !== "object") continue;
     const pl = p as Record<string, unknown>;
-    return !!pl["name"] && typeof pl["name"] === "string" && !!pl["prefix"] && typeof pl["prefix"] === "string"
-      && !String(pl["prefix"]).startsWith("/")
-      && (pl["pluginType"] === "filter" || pl["pluginType"] === "template");
-  });
+    if (typeof pl["name"] !== "string" || !pl["name"]) continue;
+    if (typeof pl["prefix"] !== "string" || !pl["prefix"] || String(pl["prefix"]).startsWith("/")) continue;
+    const patterns = Array.isArray(pl["patterns"])
+      ? (pl["patterns"] as unknown[]).filter((s): s is string => typeof s === "string" && !!s)
+      : undefined;
+    const url = typeof pl["url"] === "string" && pl["url"] ? pl["url"] : undefined;
+    // A plugin must filter, launch, or both. (v1 pluginType is dropped — behavior is derived.)
+    if ((!patterns || !patterns.length) && !url) continue;
+    const plugin: Plugin = { name: pl["name"], prefix: pl["prefix"], color: typeof pl["color"] === "string" ? pl["color"] : "" };
+    if (patterns && patterns.length) plugin.patterns = patterns;
+    if (url) plugin.url = url;
+    plugins.push(plugin);
+  }
 
   return { schemaVersion: CONFIG_SCHEMA_VERSION, prefixes, sourceColors, plugins };
 }
@@ -229,14 +253,14 @@ export function mergeResults(
   plugin: Plugin | null,
   query: string | null,
 ): SearchResult[] {
-  const isFilterPlugin = plugin !== null && plugin.pluginType === "filter";
+  const hasPatterns = plugin !== null && !!plugin.patterns && plugin.patterns.length > 0;
   const seen = new Map<string, { result: SearchResult; hasTab: boolean; hasBookmark: boolean; hasHistory: boolean }>();
   const merged: SearchResult[] = [];
   const q = query ? query.toLowerCase() : null;
 
   for (const item of [...tabResults, ...bookmarkResults, ...historyResults]) {
     if (plugin && !matchesPlugin(item.url, plugin)) continue;
-    if (isFilterPlugin && q && !fuzzyMatch(item.title, q) && !fuzzyMatch(item.url, q)) continue;
+    if (hasPatterns && q && !fuzzyMatch(item.title, q) && !fuzzyMatch(item.url, q)) continue;
     const key = urlKey(item.url);
     const entry = seen.get(key);
     if (entry) {
