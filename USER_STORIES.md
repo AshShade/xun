@@ -77,23 +77,17 @@ Type a single letter + space to narrow results to one source.
 | 28 | User types "h docs" | Only HISTORY results shown, "history" label appears |
 | 29 | User activates a prefix filter | First result is auto-selected (ready to press Enter) |
 
-## Plugins — Filter Type
+## Plugins
 
-Custom plugins that narrow results to URLs matching a glob pattern.
+A plugin has a prefix, a name, a color, and any combination of two capabilities: `patterns` (filter local results to matching URLs) and/or `url` (a `{}` template to launch a site search). At least one is required.
 
 | # | User Story | Expected Outcome |
 |---|-----------|-----------------|
-| 30 | User types "gh repo" (GitHub plugin with prefix "gh") | Only pages matching github.com/** shown |
+| 30 | User types "gh repo" (plugin with patterns github.com/**) | Only local results matching github.com/** shown |
 | 31 | Plugin is active | Plugin's colored label appears in search bar |
-
-## Plugins — Template Type
-
-Custom plugins that open a parameterized URL.
-
-| # | User Story | Expected Outcome |
-|---|-----------|-----------------|
-| 32 | User types "cs react hooks" (CodeSearch plugin) | Pressing Enter opens https://grep.app/search?q=react%20hooks |
-| 33 | Template plugin is active | Plugin's colored label appears in search bar |
+| 32 | User types "cs react hooks" (plugin with url https://grep.app/search?q={}) | A launch row opens https://grep.app/search?q=react%20hooks |
+| 33 | Plugin is active | Plugin's colored label appears in search bar |
+| 42 | User types a prefix of a plugin with BOTH patterns and url | Filtered local results shown, plus a "Search {name}: {q}" launch row pinned at the bottom |
 
 ## Functional Plugins
 

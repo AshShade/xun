@@ -414,9 +414,8 @@ function onKeydown(e: KeyboardEvent): void {
     const newTab = isMac ? e.metaKey : e.ctrlKey;
     if (state.selectedIndex >= 0) {
       handleResultAction(state.selectedIndex, newTab);
-    } else if (state.activePlugin?.pluginType === "template" && state.query) {
-      const q = state.query.trim().split(" ").slice(1).join(" ").trim();
-      if (q) navigate({ type: "history", title: "", url: (state.activePlugin as { url: string }).url.replace("{}", encodeURIComponent(q)), score: 0 }, newTab);
+    } else if (state.activePlugin) {
+      // Prefix active but nothing selected (e.g. empty query) — nothing to launch.
     } else if (state.query) {
       const q = state.query.trim();
       if (looksLikeUrl(q)) {

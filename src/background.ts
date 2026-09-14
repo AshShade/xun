@@ -5,10 +5,10 @@ import {
   matchesPlugin, parseQuery, mergeResults, validateConfig, DEFAULT_CONFIG,
   mergeHistoryCache, loadCaches, serializeCaches, applySnapshot,
   queryHistory, queryBookmarks, queryTabs,
-  computeExpression, fuzzyMatch, suggestGhost, decayScore, textMatch, shouldSearch,
+  computeExpression, fuzzyMatch, suggestGhost, decayScore, textMatch, shouldSearch, templateResult,
 } from "./lib";
 
-import type { BookmarkEntry, BrowserDataPort, CacheSnapshot, Config, FnResponse, HistoryEntry, SearchResponse, TabEntry } from "./types";
+import type { BookmarkEntry, BrowserDataPort, CacheSnapshot, Config, FnResponse, HistoryEntry, SearchResponse, SearchResult, TabEntry } from "./types";
 
 let config: Config = { ...DEFAULT_CONFIG };
 let syncUrl = "";
@@ -213,16 +213,20 @@ function handleSearch(raw: string): SearchResponse {
     return { results: [], hasPrefix, sourceColors: config.sourceColors, plugin, source, ghost };
   }
 
-  if (plugin && plugin.pluginType === "template") {
-    return { results: [], hasPrefix, sourceColors: config.sourceColors, plugin, source, ghost: "" };
+  // Local results only for source prefixes and pattern plugins. A template-only
+  // plugin (url, no patterns) shows just its launch row, not the whole history.
+  const hasPatterns = !!(plugin?.patterns?.length);
+  let merged: SearchResult[] = [];
+  if (!plugin || hasPatterns) {
+    const tabs = !source || source === "tabs" ? queryTabs(tabCache, query) : [];
+    const bookmarks = !source || source === "bookmarks" ? queryBookmarks(bookmarkCache, query) : [];
+    const history = !source || source === "history" ? queryHistory(historyCache, query) : [];
+    merged = mergeResults(tabs, bookmarks, history, plugin, query);
   }
 
-  // Query layer — scores, deduplicates, filters from raw caches
-  const tabs = !source || source === "tabs" ? queryTabs(tabCache, query) : [];
-  const bookmarks = !source || source === "bookmarks" ? queryBookmarks(bookmarkCache, query) : [];
-  const history = !source || source === "history" ? queryHistory(historyCache, query) : [];
+  const launch = templateResult(plugin, query);
+  if (launch) merged = [...merged, launch];
 
-  const merged = mergeResults(tabs, bookmarks, history, plugin, query);
   DEV: {
   for (let i = 0; i < Math.min(5, merged.length); i++) {
     const r = merged[i]!;
@@ -279,7 +283,7 @@ const fnPlugins: FnPlugin[] = [
       const plugins = config.plugins ?? [];
       if (!plugins.length) return [{ value: "No plugins configured", action: "fill" as const }];
       const results = plugins.map(p => {
-        const secondary = "patterns" in p ? p.patterns.join(", ") : p.url;
+        const secondary = [p.patterns?.join(", "), p.url].filter(Boolean).join("  ·  ");
         const score = q ? Math.max(fuzzyMatch(p.name, q), fuzzyMatch(p.prefix, q), fuzzyMatch(secondary, q)) : 1;
         return { p, secondary, score };
       }).filter(x => x.score > 0).sort((a, b) => b.score - a.score);

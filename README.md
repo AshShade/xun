@@ -37,16 +37,24 @@ Type a prefix followed by a space to narrow results. A colored label appears whe
 
 ## Plugins
 
-### Filter Plugin
-Narrows results by URL glob pattern.
+A plugin has a `prefix`, `name`, `color`, and any combination of `patterns` (filter results by URL glob) and `url` (a `{}` template to launch a site search). At least one is required.
+
+### Filter (patterns)
+Narrows results to URLs matching the glob patterns.
 ```json
-{ "name": "Wiki", "prefix": "w", "pluginType": "filter", "patterns": ["docs.example.com/**"], "color": "#f38ba8" }
+{ "name": "Wiki", "prefix": "w", "patterns": ["docs.example.com/**"], "color": "#f38ba8" }
 ```
 
-### Template Plugin
-Opens a parameterized URL with `{}` replaced by your query.
+### Launch (url)
+Adds a launch row that opens the URL with `{}` replaced by your query.
 ```json
-{ "name": "CodeSearch", "prefix": "cs", "pluginType": "template", "url": "https://grep.app/search?q={}", "color": "#fab387" }
+{ "name": "CodeSearch", "prefix": "cs", "url": "https://grep.app/search?q={}", "color": "#fab387" }
+```
+
+### Both
+Set both to filter local results and show a launch row pinned at the bottom.
+```json
+{ "name": "GitHub", "prefix": "gh", "patterns": ["github.com/**"], "url": "https://github.com/search?q={}", "color": "#a6e3a1" }
 ```
 
 ### Functional Plugins

@@ -1,4 +1,4 @@
-import { test, expect, openXun, isOverlayVisible, typeInXun, getResultCount } from "./fixtures";
+import { test, expect, openXun, isOverlayVisible, typeInXun, getResultCount, setConfig, getResultUrls, getResultTitles, getPluginLabel } from "./fixtures";
 
 test.describe("Core Launch", () => {
   // USER_STORIES.md #1: User presses Cmd+K (Mac) or Ctrl+K on any page → overlay appears with input focused
@@ -429,60 +429,84 @@ test.describe("Prefix Filters", () => {
   });
 });
 
-test.describe("Plugins — Filter Type", () => {
-  // USER_STORIES.md #30: User types filter plugin prefix + space → results filtered by URL patterns
-  test("Story 30: Filter plugin narrows by URL pattern", async ({ context }) => {
-    // This test depends on user config having a filter plugin
-    // Just verify the mechanism works with the default state
+test.describe("Plugins — filter (patterns)", () => {
+  // USER_STORIES.md #30: A plugin with patterns narrows local results to matching URLs.
+  test("Story 30: Plugin with patterns narrows by URL pattern", async ({ context }) => {
     const page = await context.newPage();
-    await page.goto("https://example.com");
+    await page.goto("https://example.com/");
+    await page.goto("https://example.org/"); // seed a non-matching URL into history
+    await setConfig(context, { plugins: [{ name: "Example", prefix: "ex", patterns: ["example.com"], color: "#f38ba8" }] });
+    await page.goto("https://example.com/");
     await openXun(page);
-    // Type a prefix that doesn't exist — should show no special behavior
-    await typeInXun(page, "nonexistentprefix ");
-    await page.waitForTimeout(200);
-    expect(await isOverlayVisible(page)).toBe(true);
+    await page.waitForTimeout(300); // let refresh-cache load history
+    await typeInXun(page, "ex example");
+    await page.waitForTimeout(400);
+    const urls = await getResultUrls(page);
+    expect(urls.length).toBeGreaterThan(0);
+    expect(urls.some((u) => u.includes("example.com"))).toBe(true);
+    expect(urls.some((u) => u.includes("example.org"))).toBe(false);
   });
 
-  // USER_STORIES.md #31: Plugin is active → plugin colored label appears in search bar
-  test("Story 31: Filter plugin shows colored label", async ({ context }) => {
+  // USER_STORIES.md #31: An active plugin shows its colored label in the search bar.
+  test("Story 31: Active plugin shows its name as label", async ({ context }) => {
     const page = await context.newPage();
-    await page.goto("https://example.com");
+    await setConfig(context, { plugins: [{ name: "Example", prefix: "ex", patterns: ["example.com"], color: "#f38ba8" }] });
+    await page.goto("https://example.com/");
     await openXun(page);
-    await typeInXun(page, "t example");
-    await page.waitForTimeout(200);
-    const label = await page.evaluate(() => {
-      const host = document.getElementById("xun-host")!;
-      return host.shadowRoot!.getElementById("xun-plugin-label")?.textContent ?? "";
-    });
-    // Built-in "t" prefix should show a label
-    expect(label.length).toBeGreaterThan(0);
+    await typeInXun(page, "ex example");
+    await page.waitForTimeout(300);
+    expect(await getPluginLabel(page)).toBe("Example");
   });
 });
 
-test.describe("Plugins — Template Type", () => {
-  // USER_STORIES.md #32: User types template prefix + query + Enter → opens parameterized URL
-  test("Story 32: Template plugin opens parameterized URL", async ({ context }) => {
-    // Requires config with a template plugin — test the mechanism
+test.describe("Plugins — launch (url)", () => {
+  // USER_STORIES.md #32: A url plugin adds a launch row that opens the {}-interpolated URL.
+  test("Story 32: Plugin with url opens the interpolated URL", async ({ context }) => {
     const page = await context.newPage();
-    await page.goto("https://example.com");
+    await setConfig(context, { plugins: [{ name: "Grep", prefix: "cs", url: "https://example.com/search?q={}", color: "#fab387" }] });
+    await page.goto("https://example.org/");
     await openXun(page);
-    // Without a configured template plugin, just verify no crash
-    await typeInXun(page, "nonexistent query");
-    await page.waitForTimeout(100);
-    expect(await isOverlayVisible(page)).toBe(true);
+    await page.waitForTimeout(300);
+    await typeInXun(page, "cs hello world");
+    await page.waitForTimeout(300);
+    // The launch row is the only result and is auto-selected; Enter navigates to it.
+    await page.keyboard.press("Enter");
+    await page.waitForURL("**/example.com/search**", { timeout: 5000 }).catch(() => {});
+    expect(page.url()).toContain("example.com/search?q=hello");
   });
 
-  // USER_STORIES.md #33: Template plugin is active → plugin colored label appears
-  test("Story 33: Template plugin shows label", async ({ context }) => {
+  // USER_STORIES.md #33: An active url plugin shows its colored label.
+  test("Story 33: Active url plugin shows its name as label", async ({ context }) => {
     const page = await context.newPage();
-    await page.goto("https://example.com");
+    await setConfig(context, { plugins: [{ name: "Grep", prefix: "cs", url: "https://example.com/search?q={}", color: "#fab387" }] });
+    await page.goto("https://example.org/");
     await openXun(page);
-    // Verify plugin label element exists
-    const exists = await page.evaluate(() => {
-      const host = document.getElementById("xun-host")!;
-      return host.shadowRoot!.getElementById("xun-plugin-label") !== null;
-    });
-    expect(exists).toBe(true);
+    await typeInXun(page, "cs hello");
+    await page.waitForTimeout(300);
+    expect(await getPluginLabel(page)).toBe("Grep");
+  });
+});
+
+test.describe("Plugins — both (patterns + url)", () => {
+  // USER_STORIES.md #42: A plugin with BOTH filters local results AND pins a launch row at the bottom.
+  test("Story 42: Both filters local results and appends a launch row", async ({ context }) => {
+    const page = await context.newPage();
+    await page.goto("https://example.com/");
+    await page.goto("https://example.org/");
+    await setConfig(context, { plugins: [{ name: "Both", prefix: "gh", patterns: ["example.com"], url: "https://example.com/search?q={}", color: "#a6e3a1" }] });
+    await page.goto("https://example.com/");
+    await openXun(page);
+    await page.waitForTimeout(300);
+    await typeInXun(page, "gh example");
+    await page.waitForTimeout(400);
+    const urls = await getResultUrls(page);
+    const titles = await getResultTitles(page);
+    // Filtered local results: example.com in, example.org out.
+    expect(urls.some((u) => u.includes("example.com"))).toBe(true);
+    expect(urls.some((u) => u.includes("example.org"))).toBe(false);
+    // Launch row pinned at the bottom.
+    expect(titles[titles.length - 1]).toBe("Search Both: example");
+    expect(urls[urls.length - 1]).toContain("example.com/search?q=example");
   });
 });
 

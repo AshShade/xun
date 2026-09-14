@@ -77,3 +77,38 @@ export async function isOverlayVisible(page: import("@playwright/test").Page): P
     return !!host?.shadowRoot?.getElementById("xun-overlay");
   });
 }
+
+// Helper: inject a config (with plugins) into the extension via the service
+// worker. Background's storage.onChanged listener picks it up in-memory. Pass a
+// raw partial config — validateConfig fills prefix/color defaults.
+export async function setConfig(context: BrowserContext, config: unknown): Promise<void> {
+  let [sw] = context.serviceWorkers();
+  if (!sw) sw = await context.waitForEvent("serviceworker");
+  await sw.evaluate((cfg) => chrome.storage.local.set({ config: cfg }), config);
+}
+
+// Helper: full result URLs (truncateUrl is identity, so .xun-url holds the whole URL)
+export async function getResultUrls(page: import("@playwright/test").Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const host = document.getElementById("xun-host");
+    if (!host?.shadowRoot) return [];
+    return [...host.shadowRoot.querySelectorAll("#xun-results .xun-url")].map((el) => el.textContent ?? "");
+  });
+}
+
+// Helper: result row titles (the launch row's title is "Search {name}: {q}")
+export async function getResultTitles(page: import("@playwright/test").Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const host = document.getElementById("xun-host");
+    if (!host?.shadowRoot) return [];
+    return [...host.shadowRoot.querySelectorAll("#xun-results .xun-title")].map((el) => el.textContent ?? "");
+  });
+}
+
+// Helper: active plugin label text
+export async function getPluginLabel(page: import("@playwright/test").Page): Promise<string> {
+  return page.evaluate(() => {
+    const host = document.getElementById("xun-host");
+    return host?.shadowRoot?.getElementById("xun-plugin-label")?.textContent ?? "";
+  });
+}

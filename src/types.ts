@@ -6,23 +6,13 @@ export interface Shortcut {
   key: string;
 }
 
-export interface FilterPlugin {
+export interface Plugin {
   name: string;
   prefix: string;
-  pluginType: "filter";
-  patterns: string[];
   color: string;
+  patterns?: string[];
+  url?: string;
 }
-
-export interface TemplatePlugin {
-  name: string;
-  prefix: string;
-  pluginType: "template";
-  url: string;
-  color: string;
-}
-
-export type Plugin = FilterPlugin | TemplatePlugin;
 
 export interface Config {
   schemaVersion?: number;

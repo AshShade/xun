@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { globMatch, matchesPlugin, parseQuery, decayScore, TAB_BONUS, BOOKMARK_BONUS, fuzzyMatch, textMatch, mergeResults, urlKey, validateConfig, CONFIG_SCHEMA_VERSION, mergeHistoryCache, filterBookmarks, filterTabs, loadCaches, serializeCaches, applySnapshot, queryHistory, queryBookmarks, queryTabs, computeExpression, suggestGhost, shouldSearch, MIN_QUERY_LENGTH } from "./lib";
+import { globMatch, matchesPlugin, parseQuery, decayScore, TAB_BONUS, BOOKMARK_BONUS, fuzzyMatch, textMatch, mergeResults, urlKey, validateConfig, CONFIG_SCHEMA_VERSION, mergeHistoryCache, filterBookmarks, filterTabs, loadCaches, serializeCaches, applySnapshot, queryHistory, queryBookmarks, queryTabs, computeExpression, suggestGhost, shouldSearch, MIN_QUERY_LENGTH, templateResult } from "./lib";
 import { truncateUrl, buildResultRow } from "./dom";
-import type { Config, HistoryEntry, FilterPlugin, TemplatePlugin, SearchResult, BrowserDataPort } from "./types";
+import type { Config, HistoryEntry, Plugin, SearchResult, BrowserDataPort } from "./types";
 
 describe("globMatch", () => {
   it("matches domain-only patterns with auto /**", () => {
@@ -18,7 +18,7 @@ describe("globMatch", () => {
 });
 
 describe("matchesPlugin", () => {
-  const plugin: FilterPlugin = { name: "P", prefix: "p", pluginType: "filter", patterns: ["github.com"], color: "#f00" };
+  const plugin: Plugin = { name: "P", prefix: "p", patterns: ["github.com"], color: "#f00" };
   it("matches URL against plugin patterns", () => {
     expect(matchesPlugin("https://github.com/user/repo", plugin)).toBe(true);
     expect(matchesPlugin("https://gitlab.com/user/repo", plugin)).toBe(false);
@@ -27,7 +27,7 @@ describe("matchesPlugin", () => {
     expect(matchesPlugin("https://anything.com", null)).toBe(true);
   });
   it("returns false for invalid URL", () => {
-    expect(matchesPlugin("not a valid url", { name: "P", prefix: "p", pluginType: "filter", patterns: ["x.com"], color: "#f00" })).toBe(false);
+    expect(matchesPlugin("not a valid url", { name: "P", prefix: "p", patterns: ["x.com"], color: "#f00" })).toBe(false);
   });
 });
 
@@ -35,8 +35,8 @@ describe("parseQuery", () => {
   const config: Config = {
     prefixes: { history: "h", tabs: "t", bookmarks: "b" },
     sourceColors: {}, plugins: [
-      { name: "P", prefix: "p", pluginType: "filter", patterns: [], color: "#f00" },
-      { name: "S", prefix: "cs", pluginType: "template", url: "https://s.com?q={}", color: "#0f0" },
+      { name: "P", prefix: "p", patterns: [], color: "#f00" },
+      { name: "S", prefix: "cs", url: "https://s.com?q={}", color: "#0f0" },
     ],
   };
   it("detects built-in prefix", () => {
@@ -162,15 +162,15 @@ describe("mergeResults", () => {
     type, title, url, score,
   });
 
-  it("sets categoryLabel and categoryColor for pattern plugin results", () => {
-    const plugin: FilterPlugin = { name: "Pipeline", prefix: "p", pluginType: "filter", patterns: ["ci.example.com"], color: "#f38ba8" };
+  it("sets categoryLabel and categoryColor for plugin with patterns results", () => {
+    const plugin: Plugin = { name: "Pipeline", prefix: "p", patterns: ["ci.example.com"], color: "#f38ba8" };
     const results = mergeResults([], [], [makeResult("history", "https://ci.example.com/foo", 50)], plugin, "foo");
     expect(results[0]!.categoryLabel).toBe("Pipeline");
     expect(results[0]!.categoryColor).toBe("#f38ba8");
   });
 
-  it("sets categoryLabel and categoryColor for search plugin results", () => {
-    const plugin: TemplatePlugin = { name: "CodeSearch", prefix: "cs", pluginType: "template", url: "https://grep.app/search?q={}", color: "#fab387" };
+  it("sets categoryLabel and categoryColor for plugin with url results", () => {
+    const plugin: Plugin = { name: "CodeSearch", prefix: "cs", url: "https://grep.app/search?q={}", color: "#fab387" };
     const results = mergeResults([], [], [makeResult("history", "https://grep.app/search?q=test", 50)], plugin, null);
     expect(results[0]!.categoryLabel).toBe("CodeSearch");
     expect(results[0]!.categoryColor).toBe("#fab387");
@@ -181,8 +181,8 @@ describe("mergeResults", () => {
     expect(results[0]!.categoryLabel).toBeUndefined();
   });
 
-  it("filters by pattern plugin", () => {
-    const plugin: FilterPlugin = { name: "P", prefix: "p", pluginType: "filter", patterns: ["github.com"], color: "#f00" };
+  it("filters by plugin with patterns", () => {
+    const plugin: Plugin = { name: "P", prefix: "p", patterns: ["github.com"], color: "#f00" };
     const results = mergeResults([], [], [
       makeResult("history", "https://github.com/repo", 50),
       makeResult("history", "https://gitlab.com/repo", 40),
@@ -228,8 +228,8 @@ describe("mergeResults", () => {
     expect(results[0]!.score).toBe(24);
   });
 
-  it("filters out non-matching items in pattern plugin with query", () => {
-    const plugin: FilterPlugin = { name: "P", prefix: "p", pluginType: "filter", patterns: ["github.com/**"], color: "#f00" };
+  it("filters out non-matching items in plugin with patterns with query", () => {
+    const plugin: Plugin = { name: "P", prefix: "p", patterns: ["github.com/**"], color: "#f00" };
     const results = mergeResults([], [], [
       makeResult("history", "https://github.com/match", 50),
       { ...makeResult("history", "https://github.com/other", 40), title: "Unrelated" },
@@ -294,8 +294,8 @@ describe("validateConfig", () => {
   });
   it("filters out invalid plugins", () => {
     const c = validateConfig({ plugins: [
-      { name: "Good", prefix: "g", pluginType: "filter", patterns: ["x.com"], color: "#f00" },
-      { name: "", prefix: "bad", pluginType: "filter" },
+      { name: "Good", prefix: "g", patterns: ["x.com"], color: "#f00" },
+      { name: "", prefix: "bad" },
       null,
     ] });
     expect(c.plugins).toHaveLength(1);
@@ -508,8 +508,8 @@ describe("validateConfig rejects / prefixes", () => {
   it("filters out plugins with / prefix", () => {
     const config = validateConfig({
       plugins: [
-        { name: "Good", prefix: "g", pluginType: "template", url: "http://x.com?q={}", color: "#fff" },
-        { name: "Bad", prefix: "/bad", pluginType: "template", url: "http://x.com?q={}", color: "#fff" },
+        { name: "Good", prefix: "g", url: "http://x.com?q={}", color: "#fff" },
+        { name: "Bad", prefix: "/bad", url: "http://x.com?q={}", color: "#fff" },
       ],
     });
     expect(config.plugins).toHaveLength(1);
@@ -687,5 +687,50 @@ describe("shouldSearch", () => {
     expect(MIN_QUERY_LENGTH).toBe(1);
     expect(shouldSearch("x".repeat(MIN_QUERY_LENGTH), false)).toBe(true);
     expect(shouldSearch("x".repeat(MIN_QUERY_LENGTH - 1), false)).toBe(false);
+  });
+});
+
+describe("merged plugin (filter + template unification)", () => {
+  it("migrates a v1 filter plugin: keeps patterns, drops pluginType", () => {
+    const c = validateConfig({ plugins: [{ name: "GH", prefix: "gh", pluginType: "filter", patterns: ["github.com"], color: "#f00" }] });
+    expect(c.plugins).toHaveLength(1);
+    expect(c.plugins[0]).toEqual({ name: "GH", prefix: "gh", color: "#f00", patterns: ["github.com"] });
+    expect("pluginType" in c.plugins[0]!).toBe(false);
+    expect(c.schemaVersion).toBe(CONFIG_SCHEMA_VERSION);
+  });
+
+  it("migrates a v1 template plugin: keeps url, drops pluginType", () => {
+    const c = validateConfig({ plugins: [{ name: "CS", prefix: "cs", pluginType: "template", url: "https://s.com?q={}", color: "#0f0" }] });
+    expect(c.plugins[0]).toEqual({ name: "CS", prefix: "cs", color: "#0f0", url: "https://s.com?q={}" });
+  });
+
+  it("keeps a plugin with BOTH patterns and url", () => {
+    const c = validateConfig({ plugins: [{ name: "GH", prefix: "gh", patterns: ["github.com"], url: "https://github.com/search?q={}", color: "#f00" }] });
+    expect(c.plugins[0]!.patterns).toEqual(["github.com"]);
+    expect(c.plugins[0]!.url).toBe("https://github.com/search?q={}");
+  });
+
+  it("defaults color to empty string when the plugin has no color", () => {
+    const c = validateConfig({ plugins: [{ name: "NoColor", prefix: "nc", patterns: ["x.com"] }] });
+    expect(c.plugins).toHaveLength(1);
+    expect(c.plugins[0]!.color).toBe("");
+  });
+
+  it("rejects a plugin with neither patterns nor url", () => {
+    const c = validateConfig({ plugins: [{ name: "Empty", prefix: "e", color: "#f00" }] });
+    expect(c.plugins).toHaveLength(0);
+  });
+
+  it("templateResult builds an interpolated launch row with the plugin badge", () => {
+    const row = templateResult({ name: "GH", prefix: "gh", color: "#f00", url: "https://github.com/search?q={}" }, "kiro crew");
+    expect(row).not.toBeNull();
+    expect(row!.url).toBe("https://github.com/search?q=kiro%20crew");
+    expect(row!.categoryLabel).toBe("GH");
+    expect(row!.categoryColor).toBe("#f00");
+  });
+
+  it("templateResult returns null without a url or query", () => {
+    expect(templateResult({ name: "F", prefix: "f", color: "#f00", patterns: ["x.com"] }, "q")).toBeNull();
+    expect(templateResult({ name: "GH", prefix: "gh", color: "#f00", url: "https://x.com?q={}" }, "")).toBeNull();
   });
 });
